@@ -58,7 +58,7 @@ def set_random_seed(seed):
 
 
 def get_root_logger(log_level=logging.INFO):
-    logger = logging.getLogger()
+    logger = logging.getLogger()  #logging是一个模块，logging.getlogger是获取rootlogger,获取后就可以改变basicConfig,如下面的logger.setLevel('ERROR')
     if not logger.hasHandlers():
         logging.basicConfig(
             format='%(asctime)s - %(levelname)s - %(message)s',

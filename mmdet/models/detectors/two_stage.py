@@ -25,7 +25,7 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
                  test_cfg=None,
                  pretrained=None):
         super(TwoStageDetector, self).__init__()
-        self.backbone = builder.build_backbone(backbone)
+        self.backbone = builder.build_backbone(backbone) #通过__init__中的参数，就可以把cfg中的各个dict模块分别取出来了
 
         if neck is not None:
             self.neck = builder.build_neck(neck)

@@ -4,7 +4,16 @@ from pycocotools.coco import COCO
 from .custom import CustomDataset
 from .registry import DATASETS
 
-
+#主要就是该文件+CustomDataset+单独的pythoncocoapi
+"""
+一个类CocoDataset,继承了CustomDataset，有CLASSES和4个函数
+首先是load_annotations函数，该函数返回的是img_infos,即把json文件用cocoapi导入进来，并把Img字段放在img_infos中
+第二个是get_ann_info，输入图像的序号，获取该id，然后把该张图的所有相关的ann字段获取到，
+是个list,返回的是对这个List中的多个ann字段解析
+即_parse_ann_info函数，解析出gt_bbox和gt_label和gt_bboxes_ignore值，分别都是List,然后
+再把这些放到dict中,建立键值dict()
+最后是_filter_imgs就是把一些img字段中长宽太小的图像滤出掉
+"""
 @DATASETS.register_module
 class CocoDataset(CustomDataset):
 
@@ -28,14 +37,14 @@ class CocoDataset(CustomDataset):
         self.cat_ids = self.coco.getCatIds()
         self.cat2label = {
             cat_id: i + 1
-            for i, cat_id in enumerate(self.cat_ids)
+            for i, cat_id in enumerate(self.cat_ids)  #self.cat_ids没有指定参数时，返回的是所有类的id,建立一个dict,键值是类id,值是Label
         }
-        self.img_ids = self.coco.getImgIds()
+        self.img_ids = self.coco.getImgIds() #self.img_ids是个List
         img_infos = []
         for i in self.img_ids:
-            info = self.coco.loadImgs([i])[0]
-            info['filename'] = info['file_name']
-            img_infos.append(info)
+            info = self.coco.loadImgs([i])[0] #获取该id的图像字段
+            info['filename'] = info['file_name']  #原先没有filename这个键值
+            img_infos.append(info)  
         return img_infos
 
     def get_ann_info(self, idx):
@@ -54,7 +63,13 @@ class CocoDataset(CustomDataset):
             if min(img_info['width'], img_info['height']) >= min_size:
                 valid_inds.append(i)
         return valid_inds
-
+    
+    #ann中有ann+img+category等类，每个里面都有多个分类
+    #Img主要参数是img_id,h,w
+    #ann的主要参数是bbox,img_id,cat_id,id
+    #cat的主要参数是cat_id
+    #一个ann代表的是一个Bbox的主要参数，所以一个img可以有多个ann，可以通过ann的img_id来知道在那个id中，通过cat_id，知道该Bbox是哪个类
+    #返回一个dict
     def _parse_ann_info(self, ann_info, with_mask=True):
         """Parse bbox and mask annotation.
 
@@ -83,12 +98,13 @@ class CocoDataset(CustomDataset):
             x1, y1, w, h = ann['bbox']
             if ann['area'] <= 0 or w < 1 or h < 1:
                 continue
-            bbox = [x1, y1, x1 + w - 1, y1 + h - 1]
+            #根据左上角坐标和宽高求右下角坐标时，要减1
+            bbox = [x1, y1, x1 + w - 1, y1 + h - 1]  #bbox在annotation的文件中是(x1,y1,w,h)即左上角坐标和宽高值，在提取每个batch的时候就转变成左上和右下坐标了
             if ann['iscrowd']:
                 gt_bboxes_ignore.append(bbox)
             else:
                 gt_bboxes.append(bbox)
-                gt_labels.append(self.cat2label[ann['category_id']])
+                gt_labels.append(self.cat2label[ann['category_id']])  #根据对应的ann中的category_id，输入到cat2label中求label,cat2label把类别数+1作为label，因为label=0是背景
             if with_mask:
                 gt_masks.append(self.coco.annToMask(ann))
                 mask_polys = [

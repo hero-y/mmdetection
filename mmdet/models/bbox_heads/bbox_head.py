@@ -8,7 +8,10 @@ from ..builder import build_loss
 from ..losses import accuracy
 from ..registry import HEADS
 
+"""
+一个类BBoxHead,继承nn.Module,包含8个函数
 
+"""
 @HEADS.register_module
 class BBoxHead(nn.Module):
     """Simplest RoI head, with only two fc layers for classification and
@@ -40,7 +43,7 @@ class BBoxHead(nn.Module):
         self.num_classes = num_classes
         self.target_means = target_means
         self.target_stds = target_stds
-        self.reg_class_agnostic = reg_class_agnostic
+        self.reg_class_agnostic = reg_class_agnostic #agnostic:不可知
         self.fp16_enabled = False
 
         self.loss_cls = build_loss(loss_cls)
@@ -77,12 +80,12 @@ class BBoxHead(nn.Module):
 
     def get_target(self, sampling_results, gt_bboxes, gt_labels,
                    rcnn_train_cfg):
-        pos_proposals = [res.pos_bboxes for res in sampling_results]
+        pos_proposals = [res.pos_bboxes for res in sampling_results] #len(sampling_results)为batch的大小
         neg_proposals = [res.neg_bboxes for res in sampling_results]
         pos_gt_bboxes = [res.pos_gt_bboxes for res in sampling_results]
         pos_gt_labels = [res.pos_gt_labels for res in sampling_results]
         reg_classes = 1 if self.reg_class_agnostic else self.num_classes
-        cls_reg_targets = bbox_target(
+        cls_reg_targets = bbox_target(  #对于bbox_target来说，就是用proposal和它对应的gt_bboxes和labels生成target
             pos_proposals,
             neg_proposals,
             pos_gt_bboxes,
@@ -104,7 +107,7 @@ class BBoxHead(nn.Module):
              reduction_override=None):
         losses = dict()
         if cls_score is not None:
-            avg_factor = max(torch.sum(label_weights > 0).float().item(), 1.)
+            avg_factor = max(torch.sum(label_weights > 0).float().item(), 1.)  #.float是为了变成小数，.item是为了去掉tensor，因为avg_factory要作为参数传进去
             losses['loss_cls'] = self.loss_cls(
                 cls_score,
                 labels,
@@ -113,12 +116,15 @@ class BBoxHead(nn.Module):
                 reduction_override=reduction_override)
             losses['acc'] = accuracy(cls_score, labels)
         if bbox_pred is not None:
-            pos_inds = labels > 0
+            pos_inds = labels > 0 #pos_inds是前景的序号，label里面的值是大于等于零的，等于零的是背景,把pos_inds作为序号带入时，1的位置有效，0的位置无效
+            #labels > 0就是把label里大于零的那些位置设为1，其余设置为零
             if self.reg_class_agnostic:
                 pos_bbox_pred = bbox_pred.view(bbox_pred.size(0), 4)[pos_inds]
-            else:
-                pos_bbox_pred = bbox_pred.view(bbox_pred.size(0), -1,
-                                               4)[pos_inds, labels[pos_inds]]
+            else: #进入这里
+                pos_bbox_pred = bbox_pred.view(bbox_pred.size(0), -1, 
+                                               4)[pos_inds, labels[pos_inds]] 
+                #(n,81,4)[pos_inds,labels[pos_inds]]，pos_inds的目的是为了把前向背景(label不为零的，也就是正样本)取出,labels[pos_inds],这个是为了确定这个的类是什么，是对第二维操作，
+                #就是说先挑出n个label不为零的pred,这n个pred里面的每一个都有81行4列，labels[pos_inds]就是对从81个里面根据label挑一个，最后shape是(len(labels[pos_inds]),4)                            
             losses['loss_bbox'] = self.loss_bbox(
                 pos_bbox_pred,
                 bbox_targets[pos_inds],

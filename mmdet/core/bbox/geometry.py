@@ -1,6 +1,14 @@
 import torch
 
-
+"""
+只有一个函数bbox_overlaps
+bboxes1是gt,bboxes2是proposals
+先把每个gt和每个proposal的交汇点坐标求出 lt=torch.max(bboxes1[:,None,:2],bboxes2[:,:2])
+rb=torch.min(bboxes1[:,None,2:],bboxes2[:,2:])
+再求overlap,就先要求wh,wh = lt - rb +1,在把w*h即可
+再求两个area的面积和，areas1 = (bboxes1[:,2]-bboxes2[:,0] +1)*(bboxes1[:,3]-bboxes2[:,1]+1)
+areas1[:,None]+areas2
+"""
 def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False):
     """Calculate overlap between two set of bboxes.
 
@@ -44,20 +52,19 @@ def bbox_overlaps(bboxes1, bboxes2, mode='iou', is_aligned=False):
             ious = overlap / (area1 + area2 - overlap)
         else:
             ious = overlap / area1
-    else:
+    else: #进入
         lt = torch.max(bboxes1[:, None, :2], bboxes2[:, :2])  # [rows, cols, 2]
         rb = torch.min(bboxes1[:, None, 2:], bboxes2[:, 2:])  # [rows, cols, 2]
-
-        wh = (rb - lt + 1).clamp(min=0)  # [rows, cols, 2]
+        #lt:left top  rb:right bottom
+        wh = (rb - lt + 1).clamp(min=0)  # [rows, cols, 2] x相减为w,y相减为h
         overlap = wh[:, :, 0] * wh[:, :, 1]
         area1 = (bboxes1[:, 2] - bboxes1[:, 0] + 1) * (
-            bboxes1[:, 3] - bboxes1[:, 1] + 1)
+            bboxes1[:, 3] - bboxes1[:, 1] + 1)  #gt的面积
 
         if mode == 'iou':
             area2 = (bboxes2[:, 2] - bboxes2[:, 0] + 1) * (
                 bboxes2[:, 3] - bboxes2[:, 1] + 1)
-            ious = overlap / (area1[:, None] + area2 - overlap)
+            ious = overlap / (area1[:, None] + area2 - overlap) #area1要加个None,是为了构造成[rows, cols]的样子
         else:
-            ious = overlap / (area1[:, None])
-
-    return ious
+            ious = overlap / (area1[:, None])  #iou的话是overlap/面积之和 iof是overlap/gt的面积
+    return ious #(k,n)

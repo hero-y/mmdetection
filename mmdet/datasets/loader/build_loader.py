@@ -13,7 +13,10 @@ if platform.system() != 'Windows':
     rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 
-
+"""
+就一个函数build_dataloader，先生成sampler,有DistributedGroupSampler,DistributedSampler,GroupSampler
+再调用torch.utils.data.DataLoader把dataset和sampler和batch等参数输入进去
+"""
 def build_dataloader(dataset,
                      imgs_per_gpu,
                      workers_per_gpu,
@@ -22,7 +25,7 @@ def build_dataloader(dataset,
                      **kwargs):
     shuffle = kwargs.get('shuffle', True)
     if dist:
-        rank, world_size = get_dist_info()
+        rank, world_size = get_dist_info()  #当前进程排名，分布式组中的进程数
         if shuffle:
             sampler = DistributedGroupSampler(dataset, imgs_per_gpu,
                                               world_size, rank)
@@ -35,7 +38,7 @@ def build_dataloader(dataset,
         sampler = GroupSampler(dataset, imgs_per_gpu) if shuffle else None
         batch_size = num_gpus * imgs_per_gpu
         num_workers = num_gpus * workers_per_gpu
-
+    
     data_loader = DataLoader(
         dataset,
         batch_size=batch_size,

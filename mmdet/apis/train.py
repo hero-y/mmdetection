@@ -37,6 +37,7 @@ def parse_losses(losses):
 
 
 def batch_processor(model, data, train_mode):
+    #data是从for i in data_batch中获得，每个data是一个小batch,是个字典['img', 'img_meta', 'gt_bboxes', 'gt_labels', 'gt_bboxes_ignore']
     losses = model(**data)
     loss, log_vars = parse_losses(losses)
 
@@ -87,13 +88,13 @@ def build_optimizer(model, optimizer_cfg):
     """
     if hasattr(model, 'module'):
         model = model.module
-
+    
     optimizer_cfg = optimizer_cfg.copy()
     paramwise_options = optimizer_cfg.pop('paramwise_options', None)
     # if no paramwise option is specified, just use the global setting
-    if paramwise_options is None:
+    if paramwise_options is None: # 用getattr取出torch.optim中的SGD，再把optim的配置代入并把model.parameters用setdefault代入
         return obj_from_dict(optimizer_cfg, torch.optim,
-                             dict(params=model.parameters()))
+                             dict(params=model.parameters())) 
     else:
         assert isinstance(paramwise_options, dict)
         # get base lr and weight decay
@@ -199,13 +200,15 @@ def _non_dist_train(model, dataset, cfg, validate=False):
             cfg.gpus,
             dist=False)
     ]
+    # print(len(data_loaders[0]))  #data_loaders[0]和cfg中的workflow中的1对应，就一个。len的长度是batch的个数
     # put model on gpus
-    model = MMDataParallel(model, device_ids=range(cfg.gpus)).cuda()
-
+    #这个时候的model中的参数就已经是tensor了，因为建立model的时候都是用nn建立的，也可以看再初始化的时候，传入的model.w就是tensor
+    model = MMDataParallel(model, device_ids=range(cfg.gpus)).cuda()  #非分布式的时候使用MMDataParallel,其实调用的是nn.Dataparallel,把model放到cuda上
+    #而对于数据来说，是在run中执行for i in data_batch中调用了COCO的prepare_train_img,这里面有transform就把图像变成了tensor，并放到了cuda上
     # build runner
     optimizer = build_optimizer(model, cfg.optimizer)
     runner = Runner(model, batch_processor, optimizer, cfg.work_dir,
-                    cfg.log_level)
+                    cfg.log_level)  #在mmcv中，把batch_processor函数当做变量传入
     # fp16 setting
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is not None:
@@ -214,10 +217,24 @@ def _non_dist_train(model, dataset, cfg, validate=False):
     else:
         optimizer_config = cfg.optimizer_config
     runner.register_training_hooks(cfg.lr_config, optimizer_config,
-                                   cfg.checkpoint_config, cfg.log_config)
-
-    if cfg.resume_from:
+                                   cfg.checkpoint_config, cfg.log_config) 
+    # - LrUpdaterHook
+    # - OptimizerStepperHook
+    # - CheckpointSaverHook
+    # - IterTimerHook
+    # - LoggerHook(s) 5个hook按顺序排列 放在self._hooks
+    if cfg.resume_from:  #resume和Load_from都是用了mmcv中的load_checkpoint,不同的是resume_from把epoch,iter换成了checkpoint后的epoch,iter，并且把optimizer也更新了 self.optimizer.load_state_dict(checkpoint['optimizer'])
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
     runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
+    """
+    只有run函数中的logger.info才会保存在文件中
+    使用self.call_hook函数，传入的是before_run,before run, before train epoch, after train epoch,
+    before train iter, after train iter, before val epoch, after val epoch, before val iter, after val iter, after run
+    每次调用时，对每个hook遍历，然后对每个hook都用getattr,如果有则返回该函数，没有则default
+    epoch_runner = getattr(self, mode),调用self.train函数，里面有 before train epoch ，before train iter, after train iter， after train epoch这些指的都是一次
+    
+    self._max_iters = self._max_epochs * len(data_loader)迭代次数，epoch*batch个数的大小 data_loader为data_loaders[0]
+
+    """

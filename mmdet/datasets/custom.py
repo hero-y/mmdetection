@@ -12,7 +12,11 @@ from .transforms import (ImageTransform, BboxTransform, MaskTransform,
 from .utils import to_tensor, random_scale
 from .extra_aug import ExtraAugmentation
 
-
+"""
+这里有一个类CustomDataset，继承的是torch.utils.data中的Dataset,主要就是初始化的时候调用coco(也可以是别的子类)中的load_annotations导入ann，并且定义了几个transform
+且使用__getitem__去调用了prepare_train_img和prepare_test_img,这个是在每次batch的时候才会调用，其实就是对图像的预处理
+返回的data是一个dict,该data就是直接输入到网络中的
+"""
 @DATASETS.register_module
 class CustomDataset(Dataset):
     """Custom dataset for detection.
@@ -62,21 +66,21 @@ class CustomDataset(Dataset):
         self.img_prefix = img_prefix
 
         # load annotations (and proposals)
-        self.img_infos = self.load_annotations(ann_file)
+        self.img_infos = self.load_annotations(ann_file) #List包含图像字段的信息
         if proposal_file is not None:
             self.proposals = self.load_proposals(proposal_file)
         else:
             self.proposals = None
         # filter images with no annotation during training
         if not test_mode:
-            valid_inds = self._filter_imgs()
-            self.img_infos = [self.img_infos[i] for i in valid_inds]
+            valid_inds = self._filter_imgs()  #过滤掉长宽较小的图片取出inds，是个List,例如:[5,8,32..]
+            self.img_infos = [self.img_infos[i] for i in valid_inds] #因为valid_inds不是[0,0,1]这样的，所以要迭代再带入求img_infos,再加一个[]
             if self.proposals is not None:
                 self.proposals = [self.proposals[i] for i in valid_inds]
 
         # (long_edge, short_edge) or [(long1, short1), (long2, short2), ...]
         self.img_scales = img_scale if isinstance(img_scale,
-                                                  list) else [img_scale]
+                                                  list) else [img_scale] #不是List
         assert mmcv.is_list_of(self.img_scales, tuple)
         # normalization configs
         self.img_norm_cfg = img_norm_cfg
@@ -145,6 +149,10 @@ class CustomDataset(Dataset):
 
     def _filter_imgs(self, min_size=32):
         """Filter images too small."""
+        """该函数应该也可以写成:
+            valid_inds = torch.zeros(len(self.img_infos))
+            valid_inds[ i if min(img_info['width'], img_info['height']) >= min_size for i, img_info in enumerate(self.img_infos)] = 1
+        """
         valid_inds = []
         for i, img_info in enumerate(self.img_infos):
             if min(img_info['width'], img_info['height']) >= min_size:
@@ -178,9 +186,10 @@ class CustomDataset(Dataset):
             return data
 
     def prepare_train_img(self, idx):
+        #调用这个是在runner的for i, data_batch in enumerate(data_loader):中用了data_loader封装里的函数
         img_info = self.img_infos[idx]
         # load image
-        img = mmcv.imread(osp.join(self.img_prefix, img_info['filename']))
+        img = mmcv.imread(osp.join(self.img_prefix, img_info['filename']))  #本质cv2.imread，opencv读取的图片是bgr,在下面的transforms中变成了rgb
         # load proposals if necessary
         if self.proposals is not None:
             proposals = self.proposals[idx][:self.num_max_proposals]
@@ -199,8 +208,8 @@ class CustomDataset(Dataset):
             else:
                 scores = None
 
-        ann = self.get_ann_info(idx)
-        gt_bboxes = ann['bboxes']
+        ann = self.get_ann_info(idx)  #ann是个字典，根据idx获取到了对应图片中的标注信息
+        gt_bboxes = ann['bboxes']  #gt_bboxes是一个list
         gt_labels = ann['labels']
         if self.with_crowd:
             gt_bboxes_ignore = ann['bboxes_ignore']
@@ -216,13 +225,14 @@ class CustomDataset(Dataset):
             img, gt_bboxes, gt_labels = self.extra_aug(img, gt_bboxes,
                                                        gt_labels)
 
+ 
         # apply transforms
         flip = True if np.random.rand() < self.flip_ratio else False
         # randomly sample a scale
         img_scale = random_scale(self.img_scales, self.multiscale_mode)
         img, img_shape, pad_shape, scale_factor = self.img_transform(
-            img, img_scale, flip, keep_ratio=self.resize_keep_ratio)
-        img = img.copy()
+            img, img_scale, flip, keep_ratio=self.resize_keep_ratio) #img_shape是pad之前的
+        img = img.copy()  #这时的图像还是numpy.ndarray,没有device
         if self.with_seg:
             gt_seg = mmcv.imread(
                 osp.join(self.seg_prefix,
@@ -246,17 +256,17 @@ class CustomDataset(Dataset):
             gt_masks = self.mask_transform(ann['masks'], pad_shape,
                                            scale_factor, flip)
 
-        ori_shape = (img_info['height'], img_info['width'], 3)
+        ori_shape = (img_info['height'], img_info['width'], 3)  #最开始的图像
         img_meta = dict(
-            ori_shape=ori_shape,
-            img_shape=img_shape,
-            pad_shape=pad_shape,
+            ori_shape=ori_shape, #最开始的图像
+            img_shape=img_shape, #resize后的图像
+            pad_shape=pad_shape, #resize后并pad后的图像
             scale_factor=scale_factor,
             flip=flip)
 
         data = dict(
-            img=DC(to_tensor(img), stack=True),
-            img_meta=DC(img_meta, cpu_only=True),
+            img=DC(to_tensor(img), stack=True),  #data是个dict,里边有很多参数，img,gt_label,gt_bbox变成tensor，用data_container
+            img_meta=DC(img_meta, cpu_only=True), #DC把这些值变成了tensor，并且放到了cuda上
             gt_bboxes=DC(to_tensor(gt_bboxes)))
         if self.proposals is not None:
             data['proposals'] = DC(to_tensor(proposals))
@@ -311,7 +321,7 @@ class CustomDataset(Dataset):
         imgs = []
         img_metas = []
         proposals = []
-        for scale in self.img_scales:
+        for scale in self.img_scales:  #如果是多尺度测设，则会产生多个图像
             _img, _img_meta, _proposal = prepare_single(
                 img, scale, False, proposal)
             imgs.append(_img)

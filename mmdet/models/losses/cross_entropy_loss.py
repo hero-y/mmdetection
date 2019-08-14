@@ -5,17 +5,24 @@ import torch.nn.functional as F
 from .utils import weight_reduce_loss
 from ..registry import LOSSES
 
-
+"""
+一个类CrossEntropyLoss,继承nn.Module,里面有两个函数初始化和forward,注意用forward是因为要backward,
+否则直接用__call__也可以调用，外面有三个函数
+初始化函数是把三个loss函数作为属性传了进来，并判断要用哪个loss函数，forward就调用loss函数，并加了loss_weight
+"""
+#对于anchor来说输入的pred和label是所有anchor的，并且也都计算了loss，但是因为有label_weights,
+#label_weights会对pos和neg都计算，而bbox_weights只有pos才是1
+#anchor中的cls输出通道只有一个值(因为sigmoid)，p是判断是物体的概率值，通过cross_entropy，如果是物体(label=1)则-log(p),此时p越大代表越可能是物体，loss就越小，如果不是(label=0)则-log(1-p),函数中自动实现
+#proposal中的cls会输出所有类的概率值，此时就只是对应的那个位置的-log(p)
 def cross_entropy(pred, label, weight=None, reduction='mean', avg_factor=None):
     # element-wise losses
-    loss = F.cross_entropy(pred, label, reduction='none')
-
+    loss = F.cross_entropy(pred, label, reduction='none')  #交叉熵损失函数的pred是(N,C),lable是(N)
+    # 也就是说label就是每个Roi就一个标签，pred是每个roi的所有类都有概率值，最后交叉熵实现的也就是：对应的那个类的概率的Log的负数，因为log的输入值是小于1的，所以负负得正
     # apply weights and do the reduction
     if weight is not None:
         weight = weight.float()
     loss = weight_reduce_loss(
-        loss, weight=weight, reduction=reduction, avg_factor=avg_factor)
-
+        loss, weight=weight, reduction=reduction, avg_factor=avg_factor) #avg_factor的值是N，实现的就是loss.sum() / avg_factor
     return loss
 
 
@@ -77,7 +84,7 @@ class CrossEntropyLoss(nn.Module):
         self.loss_weight = loss_weight
 
         if self.use_sigmoid:
-            self.cls_criterion = binary_cross_entropy
+            self.cls_criterion = binary_cross_entropy  #sigmoid把函数映射到(0,1)之间
         elif self.use_mask:
             self.cls_criterion = mask_cross_entropy
         else:

@@ -4,7 +4,11 @@ from numpy import random
 
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
 
-
+"""
+该文件在mmdet/datasets下面,包含4个类，主要是ExtraAugmentation类，其中定义了self.transform的list
+把其余的类实例化加到该list中，并使用__call__使得实例可以当做函数调用，之后再for in去调用list中的每个
+实例，那三个类也就是三个图像增广的方法，其中也是初始化和__call__
+"""
 class PhotoMetricDistortion(object):
 
     def __init__(self,
@@ -73,19 +77,19 @@ class Expand(object):
             self.mean = mean
         self.min_ratio, self.max_ratio = ratio_range
 
-    def __call__(self, img, boxes, labels):
+    def __call__(self, img, boxes, labels):  #先把宽高扩展到一定倍数，全都填充为mean,然后再在扩大后的图像中截取出原img的形状，赋回原值
         if random.randint(2):
             return img, boxes, labels
 
         h, w, c = img.shape
-        ratio = random.uniform(self.min_ratio, self.max_ratio)
+        ratio = random.uniform(self.min_ratio, self.max_ratio) #均匀取值，如果没有给shape，则就一个值
         expand_img = np.full((int(h * ratio), int(w * ratio), c),
                              self.mean).astype(img.dtype)
-        left = int(random.uniform(0, w * ratio - w))
+        left = int(random.uniform(0, w * ratio - w))  #img再扩展后的图像的起点位置
         top = int(random.uniform(0, h * ratio - h))
         expand_img[top:top + h, left:left + w] = img
         img = expand_img
-        boxes += np.tile((left, top), 2)
+        boxes += np.tile((left, top), 2)  #沿着x方向复制，(left,top,left,top)，分别对应(x,y,x,y)
         return img, boxes, labels
 
 
@@ -156,7 +160,7 @@ class ExtraAugmentation(object):
         if random_crop is not None:
             self.transforms.append(RandomCrop(**random_crop))
 
-    def __call__(self, img, boxes, labels):
+    def __call__(self, img, boxes, labels): #__call__使得类的实例可以被当做函数使用 self.extra_aug(img, gt_bboxes, gt_labels)
         img = img.astype(np.float32)
         for transform in self.transforms:
             img, boxes, labels = transform(img, boxes, labels)

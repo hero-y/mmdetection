@@ -4,14 +4,20 @@ import torch.nn as nn
 from .utils import weighted_loss
 from ..registry import LOSSES
 
-
+"""
+一个类SmoothL1Loss,类中初始化函数和forward函数，类外smooth_l1_loss
+smooth_l1_loss先用abs求差的绝对值，再用torch.where作为判断语句
+"""
 @weighted_loss
-def smooth_l1_loss(pred, target, beta=1.0):
+def smooth_l1_loss(pred, target, beta=1.0):  #rpn的beta是1.0/9.0
     assert beta > 0
     assert pred.size() == target.size() and target.numel() > 0
     diff = torch.abs(pred - target)
     loss = torch.where(diff < beta, 0.5 * diff * diff / beta,
-                       diff - 0.5 * beta)
+                       diff - 0.5 * beta)  #torch.where()就是一个判断语句,beta是系数，然后再用装饰器，去做Loss平均值
+    #0.5x*x    (|x|<1.0)
+    #|x|-0.5   (|x|>1.0)
+    #注意这里的Loss是(n,4)形状的，pred中的4个值不是x,y,wh,而是转化过得，4个值每一个都有Loss值，最后求了平均
     return loss
 
 

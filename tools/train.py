@@ -49,12 +49,12 @@ def parse_args():
 def main():
     args = parse_args()
 
-    cfg = Config.fromfile(args.config)
+    cfg = Config.fromfile(args.config)  #Config在mmcv中
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
     # update configs according to CLI args
-    if args.work_dir is not None:
+    if args.work_dir is not None:  #通过设定args中一些参数的量来改变cfg中的量
         cfg.work_dir = args.work_dir
     if args.resume_from is not None:
         cfg.resume_from = args.resume_from
@@ -65,14 +65,14 @@ def main():
         cfg.optimizer['lr'] = cfg.optimizer['lr'] * cfg.gpus / 8
 
     # init distributed env first, since logger depends on the dist info.
-    if args.launcher == 'none':
+    if args.launcher == 'none':  #默认none,再分布式训练脚本中改成了Pytorch
         distributed = False
     else:
         distributed = True
         init_dist(args.launcher, **cfg.dist_params)
 
     # init logger before other steps
-    logger = get_root_logger(cfg.log_level)
+    logger = get_root_logger(cfg.log_level)  #mmdet/api/envs
     logger.info('Distributed training: {}'.format(distributed))
 
     # set random seeds
@@ -82,9 +82,8 @@ def main():
 
     model = build_detector(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
-
     train_dataset = build_dataset(cfg.data.train)
-    if cfg.checkpoint_config is not None:
+    if cfg.checkpoint_config is not None:  #checkpoint_config = dict(interval=1)
         # save mmdet version, config file content and class names in
         # checkpoints as meta data
         cfg.checkpoint_config.meta = dict(

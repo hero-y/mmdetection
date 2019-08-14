@@ -16,7 +16,7 @@ class Bottleneck(_Bottleneck):
         If style is "pytorch", the stride-two layer is the 3x3 conv layer,
         if it is "caffe", the stride-two layer is the first 1x1 conv layer.
         """
-        super(Bottleneck, self).__init__(inplanes, planes, **kwargs)
+        super(Bottleneck, self).__init__(inplanes, planes, **kwargs)  #初始化的时候，参数还是会先传进__init__,选择性的把某些参数传入父类的初始化中
 
         if groups == 1:
             width = self.planes
@@ -153,7 +153,16 @@ def make_res_layer(block,
 
     return nn.Sequential(*layers)
 
-
+"""
+ResNext和ResNet唯一不同的地方就是Bottleneck,有两点不一样
+1.ResNext中的Bottleneck的3*3卷积用的是群卷积，设置了group参数
+2.Resnet中直接使用planes作为每一层的Bottleneck的第一层的输出通道
+而Resnext把width作为输出通道,width = math.floor((planes/64)*base_width*groups)这个公式和
+原函数中的公式一样,只不过换了顺序,用planes/64判断这是第几层了,base_width*groups=128
+还有个细节就是，在执行resnext初始化的时候,调用了resnet的初始化,就先构造了一个模型存在self.res_layers中
+,其中用了resnext中的Bottleneck,此时的groups还是1
+不过在执行resnext自己的初始化时，self.res_layers= [],把它又初始化清零了
+"""
 @BACKBONES.register_module
 class ResNeXt(ResNet):
     """ResNeXt backbone.
@@ -200,6 +209,7 @@ class ResNeXt(ResNet):
             dcn = self.dcn if self.stage_with_dcn[i] else None
             gcb = self.gcb if self.stage_with_gcb[i] else None
             planes = 64 * 2**i
+            print('planes',planes)
             res_layer = make_res_layer(
                 self.block,
                 self.inplanes,

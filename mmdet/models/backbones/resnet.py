@@ -86,6 +86,11 @@ class BasicBlock(nn.Module):
 
 
 class Bottleneck(nn.Module):
+    #里面有三个conv+bn+relu,分别是1*1conv把通道缩减4倍，3*3conv通道不变，1*1conv通道扩充4倍
+    #使用的是build_conv_layer和build_norm_layer,没有使用double_bbox_head中BasicResBlock的ConvModule
+    #可能是因为Bottleneck里面可能会引入dcn等的原因
+    #初始化的时候就只有一个self.relu = nn.Relu(inplace=True)
+    #在forward中前两个都有relu,最后一个是在相加后再relu,identiy有可能downsample
     expansion = 4
 
     def __init__(self,
@@ -133,7 +138,7 @@ class Bottleneck(nn.Module):
             self.conv1_stride = stride
             self.conv2_stride = 1
 
-        self.norm1_name, norm1 = build_norm_layer(norm_cfg, planes, postfix=1)
+        self.norm1_name, norm1 = build_norm_layer(norm_cfg, planes, postfix=1) #postfix:后缀
         self.norm2_name, norm2 = build_norm_layer(norm_cfg, planes, postfix=2)
         self.norm3_name, norm3 = build_norm_layer(
             norm_cfg, planes * self.expansion, postfix=3)
@@ -329,7 +334,28 @@ def make_res_layer(block,
 
     return nn.Sequential(*layers)
 
-
+"""
+总结Resnet:
+文章中输入是224*224的Imagenet,一共分为5个阶段，但是在代码中，第一个阶段，单独写出来了，用的函数是self.__make_stem_layer()
+使用的是7*7的conv输出通道为64，+bn+relu,特别的是该函数把第二阶段的maxpooling也写在这里面了，forward时，直接使用self.conv1..即可
+每一个阶段的输出特征图都是上一个阶段的一半。
+conv2--conv5使用make_res_layer函数构造，把这四个阶段都放在res_layers的list里面，注意该List里面放的是layer_name，
+先定义出每个阶段的layer_name,再把layer_name和对应的res_layer使用add_module对应起来，在forward时只需要self.layer_name即可调用该层的forward
+在print(module)的时候，凡是在Model中的self.都会显示出来，如self.conv1等，会把conv1显示出来，也就像self.layer1
+每个res_layer里面又有多个bottleneck，所以每个res_layer也是一个list,用.append把每个bottleneck加进去，再用nn.Sequential去定义网络序列,
+也就是说每个res_layer append了多个bottleneck,再把该res_layer，也就是一个layer中的所有bottleneck用nn.Sequential穿起来，用nn.Sequential的好处是，按顺序执行，不用麻烦的调用
+把res_layer中的第一个Bottleneck和其余的分看，因为只用第一个bottleneck中才会使用downsample，downsample的目的是为了跳连接转换通道数和尺寸，
+每个bottleneck都会有一个跳连接，但只有每个res_layer中的第一个bottleneck才有downsample,其余的直接相加即可
+每个res_layer中的第一个bottleneck和其余不同是因为:1.只有第一个才会有downsample,2.只有第一个stride才可能是2
+是因为只有第一个bottleneck的stride可能为2，其余的一定为1，所以只有第一个bottleneck才会赋值downsample,其余都是默认None
+在该.py文件中有Resnet类,Bottleneck类，make_res_layer函数，Bottleneck是类，是因为它里面有forward,顺序执行的时候会用到
+downsample的stride参数，是(1,2,2,2)，分别对应4个res_layer,只有第一个res_layer中stride=1,因为第一个res_layer的降采样任务已经在self.__make_stem_layer()的maxpool中完成，
+其余的res_layer都是在第一个bottleneck的时候使用了stride=2,对于downsample的那个判断，我认为没什么用，以为肯定会进去
+downsample的输入和输出通道分别是：inplanes是这个res_layer的inplanes,planes是planes*expansion,因为要把通道数变成一个Bottleneck之后的那个通道数
+除了第一个，其余的res_layer的inplanes是上一个res_layer的planes* block.expansion(上一个res_layer的第一阶段的输出*block.expansion)(第一个的inplanes是64)
+inpalnes的更新写在make_res_layer的后面，planes是64*2**i
+每个res_layer中第一个bottleneck的inplanes和planes和res_layer相同，但之后的bottleneck的inplanes就变成planes* block.expansion
+"""
 @BACKBONES.register_module
 class ResNet(nn.Module):
     """ResNet backbone.
@@ -509,7 +535,7 @@ class ResNet(nn.Module):
         x = self.norm1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        outs = []
+        outs = []  #resnet实际有5个大层，第一个7*7conv的层的输出没有放到out中，所以out的list里面是4个
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
             x = res_layer(x)

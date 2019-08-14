@@ -7,7 +7,11 @@ __all__ = [
     'Numpy2Tensor'
 ]
 
-
+"""
+是mmdet/datasets下面的数据transform,包括5个类和一个函数
+图像transform,BboxTransform,MaskTransform,SegMapTransform和Numpy2Tensor
+函数是bbox_flip
+"""
 class ImageTransform(object):
     """Preprocess an image.
 
@@ -30,22 +34,23 @@ class ImageTransform(object):
 
     def __call__(self, img, scale, flip=False, keep_ratio=True):
         if keep_ratio:
-            img, scale_factor = mmcv.imrescale(img, scale, return_scale=True)
+            #主要使用了cv2.imresize scale_factor=min(max(scale)/max(img[0],img[1]),min(scale)/min(img[0],img[1]))
+            img, scale_factor = mmcv.imrescale(img, scale, return_scale=True) 
         else:
             img, w_scale, h_scale = mmcv.imresize(
                 img, scale, return_scale=True)
             scale_factor = np.array([w_scale, h_scale, w_scale, h_scale],
                                     dtype=np.float32)
         img_shape = img.shape
-        img = mmcv.imnormalize(img, self.mean, self.std, self.to_rgb)
+        img = mmcv.imnormalize(img, self.mean, self.std, self.to_rgb) #(img - mean) / std
         if flip:
             img = mmcv.imflip(img)
         if self.size_divisor is not None:
-            img = mmcv.impad_to_multiple(img, self.size_divisor)
+            img = mmcv.impad_to_multiple(img, self.size_divisor) #np.ceil(img.shpae[0]/size_divisor)*size_divisor 向上取整，确定pad_h和pad_w,然后再设定该形状的empty,再从起点开始赋值为图像
             pad_shape = img.shape
         else:
             pad_shape = img_shape
-        img = img.transpose(2, 0, 1)
+        img = img.transpose(2, 0, 1)  #从h,w,c 变成 c,h,w
         return img, img_shape, pad_shape, scale_factor
 
 

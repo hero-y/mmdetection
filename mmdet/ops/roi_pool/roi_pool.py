@@ -8,7 +8,7 @@ from . import roi_pool_cuda
 
 
 class RoIPoolFunction(Function):
-
+    #静态方法无需实例化，，也可以实例化。不要求强制传参数
     @staticmethod
     def forward(ctx, features, rois, out_size, spatial_scale):
         assert features.is_cuda
@@ -47,7 +47,7 @@ class RoIPoolFunction(Function):
         return grad_input, grad_rois, None, None
 
 
-roi_pool = RoIPoolFunction.apply
+roi_pool = RoIPoolFunction.apply #使用apply的方法对自己定义的方法取个别名
 
 
 class RoIPool(nn.Module):
