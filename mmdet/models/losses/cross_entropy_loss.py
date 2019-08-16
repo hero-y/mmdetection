@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .utils import weight_reduce_loss
 from ..registry import LOSSES
+from .utils import weight_reduce_loss
 
 """
 一个类CrossEntropyLoss,继承nn.Module,里面有两个函数初始化和forward,注意用forward是因为要backward,

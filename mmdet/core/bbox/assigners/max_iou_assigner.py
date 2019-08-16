@@ -1,8 +1,8 @@
 import torch
 
-from .base_assigner import BaseAssigner
-from .assign_result import AssignResult
 from ..geometry import bbox_overlaps
+from .assign_result import AssignResult
+from .base_assigner import BaseAssigner
 
 """
 一个类MaxIoUAssigner,其中三个函数：__init__,assign,assign_wrt_overlaps(wrt:with regard to关于)

@@ -1,10 +1,10 @@
 import torch.nn as nn
 from mmcv.cnn.weight_init import normal_init, xavier_init
 
-from .bbox_head import BBoxHead
 from ..backbones.resnet import Bottleneck
 from ..registry import HEADS
 from ..utils import ConvModule
+from .bbox_head import BBoxHead
 
 """
 里面有两个类，BasicResBlock和DoubleConvFCBBoxHead
@@ -144,8 +144,8 @@ class DoubleConvFCBBoxHead(BBoxHead):
         branch_fcs = nn.ModuleList()
         for i in range(self.num_fcs):
             fc_in_channels = (
-                self.in_channels * self.roi_feat_size *
-                self.roi_feat_size if i == 0 else self.fc_out_channels) #第一个fc的输入是self.in_channels * self.roi_feat_size *self.roi_feat_size
+                self.in_channels *
+                self.roi_feat_area if i == 0 else self.fc_out_channels) #第一个fc的输入是self.in_channels * self.roi_feat_area（这个在上面有定义）
             branch_fcs.append(nn.Linear(fc_in_channels, self.fc_out_channels))
         return branch_fcs
 

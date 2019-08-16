@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from .utils import weighted_loss
 from ..registry import LOSSES
+from .utils import weighted_loss
 
 """
 一个类SmoothL1Loss,类中初始化函数和forward函数，类外smooth_l1_loss
