@@ -2,11 +2,13 @@ import os
 import platform
 import subprocess
 import time
-from setuptools import Extension, find_packages, setup
+from setuptools import Extension, dist, find_packages, setup
 
-import numpy as np
-from Cython.Build import cythonize
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+
+dist.Distribution().fetch_build_eggs(['Cython', 'numpy>=1.11.1'])
+import numpy as np  # noqa: E402
+from Cython.Build import cythonize  # noqa: E402
 
 
 def readme():
@@ -144,7 +146,7 @@ if __name__ == '__main__':
         tests_require=['pytest'],
         install_requires=[
             'mmcv>=0.2.10', 'numpy', 'matplotlib', 'six', 'terminaltables',
-            'pycocotools', 'torch>=1.1'
+            'pycocotools', 'torch>=1.1', 'imagecorruptions'
         ],
         ext_modules=[
             make_cython_ext(
