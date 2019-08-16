@@ -110,8 +110,8 @@ class SingleRoIExtractor(nn.Module):
         out_size = self.roi_layers[0].out_size  #7
         num_levels = len(feats)
         target_lvls = self.map_roi_levels(rois, num_levels)
-        roi_feats = feats[0].new_zeros(rois.size()[0], self.out_channels,
-                                       out_size, out_size)
+        roi_feats = feats[0].new_zeros(
+            rois.size(0), self.out_channels, *out_size)
         if roi_scale_factor is not None:
             rois = self.roi_rescale(rois, roi_scale_factor)
         for i in range(num_levels):
@@ -119,5 +119,5 @@ class SingleRoIExtractor(nn.Module):
             if inds.any():
                 rois_ = rois[inds, :] #取出是1的那行序号，也就是当前特征图中的roi
                 roi_feats_t = self.roi_layers[i](feats[i], rois_)
-                roi_feats[inds] += roi_feats_t #先建立好roi_feats的形状，然后用[]对应的赋值即可，此处是相加
-        return roi_feats  #最后返回的是所有roi_feats，大小为(rois.size()[0], self.out_channels,out_size, out_size)
+                roi_feats[inds] = roi_feats_t #先建立好roi_feats的形状，然后用[]对应的赋值即可，此处是相加
+        return roi_feats ##最后返回的是所有roi_feats，大小为(rois.size()[0], self.out_channels,out_size, out_size)
