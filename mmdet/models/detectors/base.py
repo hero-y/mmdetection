@@ -98,9 +98,9 @@ class BaseDetector(nn.Module):
         else:
             bbox_result, segm_result = result, None
 
-        img_tensor = data['img'][0]
+        img_tensor = data['img'][0] #取出第一个图像(是tensor类型)，其实在test的时候一次也就一个图片
         img_metas = data['img_meta'][0].data[0]
-        imgs = tensor2imgs(img_tensor, **img_norm_cfg)
+        imgs = tensor2imgs(img_tensor, **img_norm_cfg) #图像通过网络前要预处理就变成了tensor(在custom中),该函数就是把tensor重新变换维度,变成在cpu上,numpy格式，去归一化
         assert len(imgs) == len(img_metas)
 
         if dataset is None:
@@ -118,7 +118,7 @@ class BaseDetector(nn.Module):
             h, w, _ = img_meta['img_shape']
             img_show = img[:h, :w, :]
 
-            bboxes = np.vstack(bbox_result)
+            bboxes = np.vstack(bbox_result)  #垂直的把数组堆叠起来(n,5)，这是numpy堆叠数组的方式和torch不一样
             # draw segmentation masks
             if segm_result is not None:
                 segms = mmcv.concat_list(segm_result)
@@ -132,11 +132,15 @@ class BaseDetector(nn.Module):
             labels = [
                 np.full(bbox.shape[0], i, dtype=np.int32)
                 for i, bbox in enumerate(bbox_result)
-            ]
+            ] #bbox_result仍然是按类的list,bboxes才是vstack后的
             labels = np.concatenate(labels)
-            mmcv.imshow_det_bboxes(
+            mmcv.imshow_det_bboxes( #输入图像img,bboxes(有score),labels,class_name,score_thr
                 img_show,
                 bboxes,
                 labels,
                 class_names=class_names,
-                score_thr=score_thr)
+                score_thr=score_thr,
+                bbox_color='blue',
+                text_color='white',
+                thickness=2
+                )

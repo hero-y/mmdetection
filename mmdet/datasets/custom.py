@@ -341,7 +341,7 @@ class CustomDataset(Dataset):
         imgs = []
         img_metas = []
         proposals = []
-        for scale in self.img_scales:  #如果是多尺度测设，则会产生多个图像
+        for scale in self.img_scales:  #如果是多尺度测试，则会产生多个图像，不管是不是多尺度测试都会进入
             _img, _img_meta, _proposal = prepare_single(
                 img, scale, False, proposal)
             imgs.append(_img)

@@ -2,7 +2,7 @@
 model = dict(
     type='CascadeRCNN',
     num_stages=3,
-    pretrained='torchvision://resnet50',
+    pretrained=None, #'torchvision://resnet50'
     backbone=dict(
         type='ResNet',
         depth=50,
@@ -42,7 +42,7 @@ model = dict(
             num_classes=81,
             target_means=[0., 0., 0., 0.],
             target_stds=[0.1, 0.1, 0.2, 0.2],
-            reg_class_agnostic=True,
+            reg_class_agnostic=True, #cascade中是True(bbox通道数是4),fasterrcnn中是False(bbox通道数是81*4)
             loss_cls=dict(
                 type='CrossEntropyLoss',
                 use_sigmoid=False,
@@ -184,7 +184,7 @@ data = dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_train2017.json',
         img_prefix=data_root + 'train2017/',
-        img_scale=(1333, 800),
+        img_scale=(400, 800),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
         flip_ratio=0.5,
@@ -226,7 +226,7 @@ lr_config = dict(
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
-    interval=50,
+    interval=2,
     hooks=[
         dict(type='TextLoggerHook'),
         # dict(type='TensorboardLoggerHook')

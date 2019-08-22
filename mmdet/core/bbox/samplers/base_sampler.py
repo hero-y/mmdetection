@@ -60,7 +60,10 @@ class BaseSampler(metaclass=ABCMeta):
             assign_result.add_gt_(gt_labels)
             gt_ones = bboxes.new_ones(gt_bboxes.shape[0], dtype=torch.uint8)
             gt_flags = torch.cat([gt_ones, gt_flags])
-
+        
+        #采样逻辑：正样本的数量不能超过pos_fraction×num这么多,绝大部分情况下，正样本的数量
+        #没有那么多，所以num_sampled_pos会小于num_expected_pos,而num_expected_neg是
+        #用num-num_sampled_pos，而一般neg会多，所以最后的总的pos+neg还是512这么多
         num_expected_pos = int(self.num * self.pos_fraction)
         pos_inds = self.pos_sampler._sample_pos(
             assign_result, num_expected_pos, bboxes=bboxes, **kwargs)  #为了知道pos的序号，assign_result是为了用gt_inds，知道那些proposal的gt是正的，bboxes没用到
