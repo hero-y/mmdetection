@@ -41,14 +41,17 @@ def sigmoid_focal_loss(pred,
     loss = weight_reduce_loss(loss, weight, reduction, avg_factor)
     return loss
 
-
+"""
+对于retinanet来说，loss相当于是anchor_loss,是按层来的，每一层分别进入FocalLoss
+FocalLoss的forward和backward是用cuda写的
+"""
 @LOSSES.register_module
 class FocalLoss(nn.Module):
 
     def __init__(self,
                  use_sigmoid=True,
-                 gamma=2.0,
-                 alpha=0.25,
+                 gamma=2.0,#指数
+                 alpha=0.25,#前面的系数
                  reduction='mean',
                  loss_weight=1.0):
         super(FocalLoss, self).__init__()

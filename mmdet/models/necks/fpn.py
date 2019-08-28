@@ -16,6 +16,11 @@ for i in range(used_backbone_levels - 1, 0, -1):
     laterals[i - 1] += F.interpolate(
         laterals[i], scale_factor=2, mode='nearest')
 接着就用fpn_convs按序号对应对每个特征图做缓冲，最后再对最上面的特征图做F.max_pool2d,所以一共5个输出
+在RetinaNet中对FPN做了一点小改动：在FPN的论文中说ResNet使用的是C2-C5,FPN用的是P2-P5，但在RetinaNet中
+ResNet使用的是C3-C5，FPN用的是P3-P7，其中P3-P5和原先一样，P6是C5通过一个3*3，stride=2的conv得到的，P7是
+在此基础上又加上了一个3*3，stride=2的conv,所以lateral_convs就只有3个，分别负责C3-C5，fpn_convs有5个，
+添加了两个3*3，stride=2,start_level是1，backbone_end_level是4，因为输入的是ResNet的后四层，所以代表是从C3-C5
+
 """
 @NECKS.register_module
 class FPN(nn.Module):
@@ -43,7 +48,7 @@ class FPN(nn.Module):
         self.fp16_enabled = False
 
         if end_level == -1:
-            self.backbone_end_level = self.num_ins
+            self.backbone_end_level = self.num_ins #4
             assert num_outs >= self.num_ins - start_level
         else:
             # if end_level < inputs, no extra level is allowed
@@ -81,7 +86,7 @@ class FPN(nn.Module):
             self.fpn_convs.append(fpn_conv)
 
         # add extra conv layers (e.g., RetinaNet)
-        extra_levels = num_outs - self.backbone_end_level + self.start_level
+        extra_levels = num_outs - self.backbone_end_level + self.start_level #在RetinaNet中是2
         if add_extra_convs and extra_levels >= 1:
             for i in range(extra_levels):
                 if i == 0 and self.extra_convs_on_inputs:
@@ -137,7 +142,7 @@ class FPN(nn.Module):
             # add conv layers on top of original feature maps (RetinaNet)
             else:
                 if self.extra_convs_on_inputs:
-                    orig = inputs[self.backbone_end_level - 1]
+                    orig = inputs[self.backbone_end_level - 1]#是ResNet中的C5
                     outs.append(self.fpn_convs[used_backbone_levels](orig))
                 else:
                     outs.append(self.fpn_convs[used_backbone_levels](outs[-1]))

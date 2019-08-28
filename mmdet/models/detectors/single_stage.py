@@ -5,7 +5,13 @@ from .. import builder
 from ..registry import DETECTORS
 from .base import BaseDetector
 
-
+"""
+单阶段检测器，如RetinaNet,会继承这个父类，在RetinaNet的类中只是起到了传递参量的作用，
+在SingleStageDetector中才是真正的做处理，又继承了BaseDetector,在SingleStageDetector中
+主要有6个函数，初始化函数：构造各个阶段的网络，super父类的初始化是为了初始化nn.Module;
+初始化权重函数，extract_feat函数，forward_train函数，simple_test函数，aug_test函数
+而父类的BaseDetector中主要是forward,去判断是train还是test,还有就是show_result函数
+"""
 @DETECTORS.register_module
 class SingleStageDetector(BaseDetector):
 
