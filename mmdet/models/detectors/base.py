@@ -87,6 +87,7 @@ class BaseDetector(nn.Module):
         else:
             return self.forward_test(img, img_meta, **kwargs)
 
+    #下面的show_result只会是在show的时候才会进入,也就是不会rescale
     def show_result(self,
                     data,
                     result,
@@ -121,13 +122,13 @@ class BaseDetector(nn.Module):
             bboxes = np.vstack(bbox_result)  #垂直的把数组堆叠起来(n,5)，这是numpy堆叠数组的方式和torch不一样
             # draw segmentation masks
             if segm_result is not None:
-                segms = mmcv.concat_list(segm_result)
+                segms = mmcv.concat_list(segm_result) #segm_result是按类的list,每个类里面也是一个list,concat_list就是把这些list,变成一个list
                 inds = np.where(bboxes[:, -1] > score_thr)[0]
-                for i in inds:
+                for i in inds:#对每一个pro对应的mask操作，直接改变要展示的图片上的mask位置的rgb值
                     color_mask = np.random.randint(
-                        0, 256, (1, 3), dtype=np.uint8)
-                    mask = maskUtils.decode(segms[i]).astype(np.bool)
-                    img_show[mask] = img_show[mask] * 0.5 + color_mask * 0.5
+                        0, 256, (1, 3), dtype=np.uint8)#(1,3)代表一行3列，即rgb
+                    mask = maskUtils.decode(segms[i]).astype(np.bool)#解码出的是mask的位置
+                    img_show[mask] = img_show[mask] * 0.5 + color_mask * 0.5 #该mask位置的颜色值为原颜色值×0.5+随机生成的颜色值×0.5
             # draw bounding boxes
             labels = [
                 np.full(bbox.shape[0], i, dtype=np.int32)

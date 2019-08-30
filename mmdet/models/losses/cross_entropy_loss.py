@@ -57,15 +57,20 @@ def binary_cross_entropy(pred,
 
     return loss
 
-
+"""
+mask分支使用的loss函数，输入的是通过网络输出的每个pro的pred和每个pro的target，以及每个pro的label，有label是因为每一个类都有pred,所以要取出label对应的
+pred和target的size()[0]都是一个batch中所有图像的pro的和
+首先获得正pro的个数.size()[0],用arange(0,num_rois)做出一个序列，把该序列和label同时带入pred对pred进行切片
+为了是对每个proposal按顺序操作，取出每个pro的pred对应label位置的预测
+"""
 def mask_cross_entropy(pred, target, label, reduction='mean', avg_factor=None):
     # TODO: handle these two reserved arguments
     assert reduction == 'mean' and avg_factor is None
     num_rois = pred.size()[0]
     inds = torch.arange(0, num_rois, dtype=torch.long, device=pred.device)
-    pred_slice = pred[inds, label].squeeze(1)
+    pred_slice = pred[inds, label].squeeze(1)#(n,28,28) 
     return F.binary_cross_entropy_with_logits(
-        pred_slice, target, reduction='mean')[None]
+        pred_slice, target, reduction='mean')[None]#二进制交叉熵函数，是因为target的值是0或1，with_logits是内部自带了sigmoid,公式是-[t*log(p)+(1-t)*log(1-p)]
 
 
 @LOSSES.register_module

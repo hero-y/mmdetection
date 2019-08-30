@@ -192,6 +192,7 @@ class CustomDataset(Dataset):
                 continue
             return data
 
+    #一个batch有几个图像,这个函数是对图像一幅一幅处理的
     def prepare_train_img(self, idx):
         #调用这个是在runner的for i, data_batch in enumerate(data_loader):中用了data_loader封装里的函数
         img_info = self.img_infos[idx]
@@ -267,13 +268,13 @@ class CustomDataset(Dataset):
                                                    scale_factor, flip)
         if self.with_mask:
             gt_masks = self.mask_transform(ann['masks'], pad_shape,
-                                           scale_factor, flip)
+                                           scale_factor, flip)#gt_masks的大小即为图像的大小，有物体的像素位置为1，其余地方为0
 
         ori_shape = (img_info['height'], img_info['width'], 3)  #最开始的图像
         img_meta = dict(
             ori_shape=ori_shape, #最开始的图像
             img_shape=img_shape, #resize后的图像
-            pad_shape=pad_shape, #resize后并pad后的图像
+            pad_shape=pad_shape, #resize后并pad后的图像,pad是为了满足w,h都是size_divisor(32)的倍数
             scale_factor=scale_factor,
             flip=flip)
 

@@ -7,7 +7,15 @@ from ..registry import DETECTORS
 from .base import BaseDetector
 from .test_mixins import BBoxTestMixin, MaskTestMixin, RPNTestMixin
 
-
+"""
+Faster rcnn的继承的父类是TwoStageDetector,只起到了传递参量的作用
+TwoStageDetector继承了BaseDetector,RPNTestMixin,BBoxTestMixin,MaskTestMixin
+在TwoStageDetector中和SingleStageDetector一样6个函数。
+而对于double_head_rcnn来说，继承了TwoStageDetector,因为forward_train和simple_test的
+网络结构变了，所以在double_head_rcnn中重写了forward_train和simple_test,但其余的函数仍旧用的是TwoStageDetector
+对于CascadeRCNN来说，继承了BaseDetector和RPNTestMixin,没有继承TwoStageDetector,因为
+CascadeRCNN的初始化网络的部分就和TwoStageDetector不太一样，所以重写的比较多，就不继承了
+"""
 @DETECTORS.register_module
 class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
                        MaskTestMixin):
@@ -185,7 +193,7 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
 
         # mask head forward and loss
         if self.with_mask:
-            if not self.share_roi_extractor:
+            if not self.share_roi_extractor:#Mask RCNN进入
                 pos_rois = bbox2roi(
                     [res.pos_bboxes for res in sampling_results])
                 mask_feats = self.mask_roi_extractor(
@@ -208,13 +216,16 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
                             dtype=torch.uint8))
                 pos_inds = torch.cat(pos_inds)
                 mask_feats = bbox_feats[pos_inds]
-            mask_pred = self.mask_head(mask_feats)
-
+            mask_pred = self.mask_head(mask_feats)#(n,81,28,28)
+            #gt_masks也是按图像的List,gt_masks[0]也是个list,大小为label的个数，
+            #gt_masks[0][0]代表第一幅图的第一个Label的mask，它的大小是经过预处理后的图像的大小
+            #只是在有物体的地方被设置成了1，没有物体的地方设置成了0
+            #加入一张图中有3个物体，那么len(gt_masks[0])=3,gt_masks[0][0]只会把属于自己的那个部分变成1，而不会把整个图片中的所有物体变成1
             mask_targets = self.mask_head.get_target(sampling_results,
                                                      gt_masks,
-                                                     self.train_cfg.rcnn)
+                                                     self.train_cfg.rcnn)#(n,28,28)，n是两个图像的正proposal的个数和
             pos_labels = torch.cat(
-                [res.pos_gt_labels for res in sampling_results])
+                [res.pos_gt_labels for res in sampling_results])#(n,),n是两个图像的正proposal的个数和
             loss_mask = self.mask_head.loss(mask_pred, mask_targets,
                                             pos_labels)
             losses.update(loss_mask)
@@ -229,17 +240,18 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
 
         proposal_list = self.simple_test_rpn(
             x, img_meta, self.test_cfg.rpn) if proposals is None else proposals
-
+        
+        #如果rescale为true,则det_bboxes得出的结果/scale_factor
         det_bboxes, det_labels = self.simple_test_bboxes(
-            x, img_meta, proposal_list, self.test_cfg.rcnn, rescale=rescale)
+            x, img_meta, proposal_list, self.test_cfg.rcnn, rescale=rescale)#(n,5),(n,)
         bbox_results = bbox2result(det_bboxes, det_labels,
-                                   self.bbox_head.num_classes)
+                                   self.bbox_head.num_classes)#是个List,按类来
 
         if not self.with_mask:
             return bbox_results
         else:
             segm_results = self.simple_test_mask(
-                x, img_meta, det_bboxes, det_labels, rescale=rescale)
+                x, img_meta, det_bboxes, det_labels, rescale=rescale)#是个List,按类来
             return bbox_results, segm_results
 
     def aug_test(self, imgs, img_metas, rescale=False):

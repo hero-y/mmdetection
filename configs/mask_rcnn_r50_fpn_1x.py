@@ -46,7 +46,7 @@ model = dict(
         loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
     mask_roi_extractor=dict(
         type='SingleRoIExtractor',
-        roi_layer=dict(type='RoIAlign', out_size=14, sample_num=2),
+        roi_layer=dict(type='RoIAlign', out_size=14, sample_num=2),#out_size=14，可能是因为处理mask需要更多的信息才把roi的尺寸设大
         out_channels=256,
         featmap_strides=[4, 8, 16, 32]),
     mask_head=dict(
@@ -165,7 +165,7 @@ lr_config = dict(
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
-    interval=50,
+    interval=1,
     hooks=[
         dict(type='TextLoggerHook'),
         # dict(type='TensorboardLoggerHook')
