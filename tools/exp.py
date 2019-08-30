@@ -94,7 +94,7 @@ def coco_exp():
     print(a[...,None].shape)  #把前面的:都省去，None在最后一维
 
 
-def cv2_exp(): 
+def cv2_exp():
     """
     在图像上画框，并在左上角涂满颜色，并在中间写上类别
     注意：更改了mmcv中的Image.py文件，使得test-show的时候也有这个效果，该文件可以通过
@@ -107,6 +107,22 @@ def cv2_exp():
     text_height = size[0][1]
     cv2.rectangle(
         img, (bbox_int[0],bbox_int[1]-text_height-2),(bbox_int[0]+text_width,bbox_int[1]), bbox_color, thickness=-1)
+    在上面的基础上添加代码使得每个类别画出的框的颜色不同：
+    在text_color = color_val(text_color)和for bbox, label in zip(bboxes, labels)之间添加：
+    colors = ['red','green','blue','cyan','yellow','magenta']
+    old_label = 0
+    在for bbox, label in zip(bboxes, labels)和bbox_int = bbox.astype(np.int32)之间添加:
+    即：
+    for bbox, label in zip(bboxes, labels):#开始
+        if old_label != label:
+            if len(colors) == 0 :
+                colors = ['red', 'green', 'blue', 'cyan', 'yellow', 'magenta']
+            bbox_color = choice(colors)
+            colors.remove(bbox_color)
+            bbox_color = color_val(bbox_color)
+        old_label = label
+        bbox_int = bbox.astype(np.int32)#截止
+    并在开头添加from random import  choice
     """
     img = cv2.imread('../1.jpg')
     img2 = np.flip(img,axis=2) #随机翻转
@@ -126,8 +142,8 @@ def cv2_exp():
     cv2.putText(img, label_text, (bbox_int[0], bbox_int[1] - 2),
                 cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 255))
     cv2.imshow('image',img)
-    cv2.waitKey (0)  
-    cv2.destroyAllWindows() 
+    cv2.waitKey (0)
+    cv2.destroyAllWindows()
 
 def cuda_exp():
     """
@@ -165,15 +181,58 @@ def index_exp():
     print("rois经过一个普通的List作为索引值之后",b2)
     inds2 = torch.ones(len(rois),dtype = torch.uint8)
     m = torch.tensor([0,1])
-    inds2[:len(m)] = m 
+    inds2[:len(m)] = m
     b3 = rois[inds2,1:] #也就是说用切片的方法对一个tensor取出一部分，可以是把对应的索引的位置带入，也可以是把一串[0,1]带入，这串值的大小和总索引的长度一样
     print("rois经过一个和他的长度一样有0,1组成的list作为索引值之后",b3)
+    m = np.array([[0, 0, 1, 0],
+                  [0, 1, 1, 0]])
+    if (m > 0).any:#.any或.all用来判断某个array是否有True或都是True
+        print(m[m > 0])#切片操作
 
-if __name__ == '__main__':
 
+def plt_exp():
+    """
+    画出RetinaNet论文中的图1，即参数r对loss的影响
+    """
+    r = np.array([0, 0.5, 1, 2, 5])
+    x = np.linspace(0,1)
 
+    y0 = np.power((1 - x), r[0])
+    y0 = -y0 * np.log(x)
+    y1 = np.power((1 - x), r[1])
+    y1 = -y1 * np.log(x)
+    y2 = np.power((1 - x), r[2])
+    y2 = -y2 * np.log(x)
+    y3 = np.power((1 - x), r[3])
+    y3 = -y3 * np.log(x)
+    y4 = np.power((1 - x), r[4])
+    y4 = -y4 * np.log(x)
+
+    plt.xlabel("probablity of ground truth class")#x轴上的名字
+    plt.ylabel("loss")#y轴上的名字
+
+    plt.plot(x, y0, 'b', label='r = 0')
+    plt.plot(x, y1, 'r', label='r = 1')
+    plt.plot(x, y2, 'y', label='r = 2')
+    plt.plot(x, y3, 'pink', label='r = 3')
+    plt.plot(x, y4, 'g', label='r = 4')
+    plt.legend(loc = 'upper right')
+    plt.show()
+
+    """
+    画smooth_l1_loss的beta取值不同时的图
+    """
+    beta1 = 1.0
+    beta2 = 0.11
+    diff = torch.linspace(0,2,steps=50)
+    loss1 = torch.where(diff < beta1, 0.5 * diff * diff / beta1,
+                       diff - 0.5 * beta1)
+    loss2 = torch.where(diff < beta2, 0.5 * diff * diff / beta2,
+                    diff - 0.5 * beta2)
+    diff = diff.numpy()
+    loss1 = loss1.numpy()
+    loss2 = loss2.numpy()
+    plt.plot(diff,loss1,'r',diff,loss2,'b')
+    plt.show()
     
-
-
-
-
+if __name__ == '__main__':
