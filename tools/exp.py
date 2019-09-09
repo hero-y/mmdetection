@@ -6,6 +6,7 @@ import math
 import matplotlib.pyplot as plt
 import time
 from random import  choice
+from torch.autograd import Variable
 
 def exp_dim():
     m = torch.randn(2, 1, 4)
@@ -145,12 +146,41 @@ def cv2_exp():
     cv2.waitKey (0)
     cv2.destroyAllWindows()
 
+    """
+    rgb的图像和bgr的图像的shape都是(h,w,3),对于rgb来说通道3的顺序就是rgb,对于bgr来说通道3的顺序是bgr
+    当使用的是caffe的预训练模型时,to_rgb=False,因为caffe出现的比较早,兼容了opencv用的是bgr,而对于torch来说to_rgb=True
+    当to_rgb=False时：mean=[102.9801, 115.9465, 122.7717], std=[1.0, 1.0, 1.0]
+    当to_rgb=True时：mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375]
+    可以看出对于mean来说只是把第一个和第三个位置换了一下,数值大小差不多,std3个之间差不多
+    img_norm_cfg的数值应该就是使用cv2.meanStdDev求出每个图像的mean和std，再求平均
+    """
+    img = cv2.imread('../1.jpg')
+    img_rgb=cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # cv2默认为bgr顺序
+    img_rgb_mean, img_rgb_std = cv2.meanStdDev(img_rgb)
+    img_rgb_mean = img_rgb_mean.squeeze(1)
+    img_rgb_std = img_rgb_std.squeeze(1)
+    img_rgb = (img_rgb-img_rgb_mean)/img_rgb_std
+    cv2.imshow('img_rgb', img_rgb)
+    cv2.waitKey (0)
+    cv2.destroyAllWindows()
+
+
 def cuda_exp():
     """
     对于for i in range(m)，其中m来说就是普通的int,不是在cuda上
     使用.size(0),.shape[0]取出的也不是cuda
     对于在cuda的tensor上切片也可以不是cuda  n[1],n是cuda,1不是
     只有都在cuda上的tensor才能相加相与
+    """
+    """
+    detach()讲解：
+    .detach()是阻断反向传播,detach()用于返回一个新的从当前的Variable图中分离的Variable，返回的Variable不需要梯度
+    Variable是torch.autograd中的一个包，当Variable(tensor)输入的tensor的变化过程就会被Variable记录下来
+    需要在anchor_head中get_bboxes中的cls_score和bbox_pred中使用，这样是因为cls_score和bbox_pred
+    不但要用来计算loss也需要用来生成接下来的proposal，当生成proposal的时候是不需要计算梯度的，所以用.detach(),生成一个
+    不需要计算梯度的cls_score和bbox_pred
+    同样的在guided_anchor_head中get_guided_anchors_single中在生成guided_anchor时，loc_pred和shape_preds也要detach()
+    在get_bboxes中的cls_score和bbox_pred和guide_anchors和loc_mask需要detach()
     """
     m = torch.tensor([0,2,2,1,1], device='cuda')
     print(m>1) #tensor([0, 1, 1, 0, 0], device='cuda:0', dtype=torch.uint8)
@@ -188,6 +218,18 @@ def index_exp():
                   [0, 1, 1, 0]])
     if (m > 0).any:#.any或.all用来判断某个array是否有True或都是True
         print(m[m > 0])#切片操作
+
+    """
+    seq[start:end:step]
+    """
+    n = range(100)[3:18:2]
+
+    """
+    使用None的方法扩展维度，inside_flags[:,None]是(3,1);.expand相当于是复制了，inside_flags[:,None].expand(-1,9)是(3,9)
+    """
+    inside_flags = torch.tensor([3,4,5])
+    expand_inside_flags = inside_flags[:,None].expand(-1,9).reshape(-1)
+    print(expand_inside_flags)
 
 
 def plt_exp():
@@ -234,5 +276,40 @@ def plt_exp():
     loss2 = loss2.numpy()
     plt.plot(diff,loss1,'r',diff,loss2,'b')
     plt.show()
-    
+
+    """
+    画出各阈值下的AP图(cascade rcnn中的图5),iou=0.9时AP=-1,比较奇怪舍去
+    运行test_by_result文件,输入config restult eval三个参数(result形如.pkl.bbox.json)便可以通过
+    之前输出的结果文件进行coco评估
+    """
+    x = np.array([0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.95])#IOU阈值
+    y = np.array([0.585,0.567,0.545,0.517,0.484,0.439,0.379,0.300,0.038])#AP
+    plt.xlim((0.5, 0.95))
+    plt.ylim((0, 0.7))
+    plt.plot(x,y)
+    plt.show()
+
+    """
+    在cascade rcnn中的图4(The IoU histogram of training samples)的画法
+    hist输入的是一个数据组,用hist的方法可以自动计算出某个区间内的数据的数量,而bins代表是框数
+    在画某个iou区间pro的数量的时候,只需要把所有的pro的iou放到一个numpy中,再调用hist即可
+    """
+    data = np.random.rand(2000)
+    data = data[data >= 0.5]
+    plt.hist(data, bins=20, facecolor="blue", edgecolor="black", alpha=0.7)
+    plt.xlim((0.5, 1.0))
+    plt.xticks([0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+    plt.show()
+
+def basic_grammer_exp():
+    """
+    torch中定义变量时dtype的使用；torch.floor是向下取整,torch.ceil是向上取整；.clamp是限制大小；.item()是取出元素值
+    """
+    scale = torch.tensor([[54],[122]],dtype=torch.float)#在定义变量时,标注dtype,如dtype=torch.float
+    min_anchor_size = torch.tensor([32],dtype=torch.float)
+    target_lvls = torch.floor(
+        torch.log2(scale) - torch.log2(min_anchor_size) + 0.5)#torch.floor向下取整
+    target_lvls = target_lvls.clamp(min=0, max=4).long()
+    print(target_lvls[0].item())
+
 if __name__ == '__main__':
