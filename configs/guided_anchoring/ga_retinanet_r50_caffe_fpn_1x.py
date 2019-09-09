@@ -24,10 +24,10 @@ model = dict(
         in_channels=256,
         stacked_convs=4,
         feat_channels=256,
-        octave_base_scale=4,
+        octave_base_scale=4,#和RetinaNet一样是4，因为anchor_strides的起始是8，所以二者相乘为32，这和faster_rcnn的8*4是一样的，因为这代表了最小的物体的scale
         scales_per_octave=3,
         octave_ratios=[0.5, 1.0, 2.0],
-        anchor_strides=[8, 16, 32, 64, 128],
+        anchor_strides=[8, 16, 32, 64, 128],#和RetinaNet一样
         anchor_base_sizes=None,
         anchoring_means=[.0, .0, .0, .0],
         anchoring_stds=[1.0, 1.0, 1.0, 1.0],
@@ -47,7 +47,7 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=1.0),
-        loss_bbox=dict(type='SmoothL1Loss', beta=0.04, loss_weight=1.0)))
+        loss_bbox=dict(type='SmoothL1Loss', beta=0.04, loss_weight=1.0)))#为什么beta设置的这么小，可能是在ga_retinanet中即使有guided anchors,但做Loss的anchor依旧很多所以beta还是要设置的小一点？？
 # training and testing settings
 train_cfg = dict(
     ga_assigner=dict(

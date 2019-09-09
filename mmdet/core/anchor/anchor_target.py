@@ -63,7 +63,7 @@ def anchor_target(anchor_list,
         gt_labels_list = [None for _ in range(num_imgs)]
     #multi_apply获得的值都是个List,all_labels就是个List,里面的迭代对象是图像的序号
     (all_labels, all_label_weights, all_bbox_targets, all_bbox_weights,
-     pos_inds_list, neg_inds_list) = multi_apply(
+     pos_inds_list, neg_inds_list) = multi_apply(#其中有assign和sample，assign和sample也是按照图像进行的，每个图像中的5个Level cat到一起后进行的assign和sample
          anchor_target_single,
          anchor_list,
          valid_flag_list,

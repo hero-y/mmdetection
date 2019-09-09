@@ -14,7 +14,18 @@ from ..registry import HEADS
 from ..utils import bias_init_with_prob
 from .anchor_head import AnchorHead
 
+"""
+提出DCNV1是因为在传统conv中输出特征图的某个(x,y)位置的感受野形状是固定的，四四方方的，所以用了offset后，该位置的感受野
+可以相当于是有一些特殊形状的。而在guided_anchor中对特征图使用，是因为当anchor的形状不固定后，原位置(x,y)的感受野可能就
+不能满足这种形状的anchor的需求，所以用deform_conv后就能够满足了
 
+类FeatureAdaption，其中有初始化函数来传入参数，并构建所要用的网络；有初始化权重函数；有forward函数
+DCNv1由两个部分组成，在论文中是把输入特征图通过1*1卷积生成offset图，再和原输入特征图一同输入DeformableConv中
+在这里是把预测的shape(2,2,h,w)输入1*1的conv中，输出的shape是(2,72,h,w),72=3*3*2*4,输出通道之所以这样设置
+是因为输出的那个位置(x,y)是由kernal为(3,3)即原图的9个元素分别乘w相加得到的，此时要对这3*3个元素做offset，而偏移的方向是2D的
+所以输出是3*3*2，而后面的4代表deformable_groups,也就相当于是Mobilenet中的group吧，在这里使用是因为输出的某个位置(x,y)的通道数是256
+可能不想让这256个数都是用一种offset得到的，设置group为4，就相当于是有4组offset,每个group使用一组offset
+"""
 class FeatureAdaption(nn.Module):
     """Feature Adaption Module.
 
@@ -35,7 +46,7 @@ class FeatureAdaption(nn.Module):
                  kernel_size=3,
                  deformable_groups=4):
         super(FeatureAdaption, self).__init__()
-        offset_channels = kernel_size * kernel_size * 2
+        offset_channels = kernel_size * kernel_size * 2 
         self.conv_offset = nn.Conv2d(
             2, deformable_groups * offset_channels, 1, bias=False)
         self.conv_adaption = DeformConv(
@@ -51,11 +62,13 @@ class FeatureAdaption(nn.Module):
         normal_init(self.conv_adaption, std=0.01)
 
     def forward(self, x, shape):
-        offset = self.conv_offset(shape.detach())
+        offset = self.conv_offset(shape.detach())#先使用conv_offset输入shape_pred预测偏移量，每次输入的shape是一个level的(2,2,h,w)
         x = self.relu(self.conv_adaption(x, offset))
         return x
 
-
+"""
+相比AnchorHead多了get_sampled_approxs函数，loss_shape_single，loss_loc_single
+"""
 @HEADS.register_module
 class GuidedAnchorHead(AnchorHead):
     """Guided-Anchor-based head (GA-RPN, GA-RetinaNet, etc.).
@@ -199,10 +212,17 @@ class GuidedAnchorHead(AnchorHead):
         shape_pred = self.conv_shape(x)
         x = self.feature_adaption(x, shape_pred)
         # masked conv is only used during inference for speed-up
-        if not self.training:
+        if not self.training:#在测试的时候使用，测试一次只有一张图，所以用[0]
             mask = loc_pred.sigmoid()[0] >= self.loc_filter_thr
         else:
             mask = None
+        #self.conv_cls和self.conv_reg是MaskedConv2d,在train的时候mask为None,self.conv_cls和self.conv_reg就是正常的nn.conv2d
+        #在test的时候，mask不是None,conv_cls和conv_reg使用的是MaskedConv2d
+        #在test使用mask的时候，就不会对所有的guided anchors进行conv_cls和conv_reg,所以起到加速的作用
+        #loc_pred在test的时候分别在这几个时候起到作用：
+        #1.conv_cls和conv_reg的时候使用MaskedConv2d输入了loc_pred的mask(注意此时输出的cls_score和bbox_pred的shape和没用mask是一样的)
+        #2.在get_bboxes中的get_anchors时用mask对squares和shape_pred进行了过滤，所以输出的guided anchors和loc_mask都是过滤后的
+        #3.在get_bboxes_single中对输入的cls_score和bbox_pred用mask做了过滤
         cls_score = self.conv_cls(x, mask)
         bbox_pred = self.conv_reg(x, mask)
         return cls_score, bbox_pred, shape_pred, loc_pred
@@ -292,24 +312,24 @@ class GuidedAnchorHead(AnchorHead):
             squares = self.square_generators[i].grid_anchors(
                 featmap_sizes[i], self.anchor_strides[i])
             multi_level_squares.append(squares)
-        squares_list = [multi_level_squares for _ in range(num_imgs)]
+        squares_list = [multi_level_squares for _ in range(num_imgs)]#rpn中的anchor都是按图像的list
 
         # for each image, we compute multi level guided anchors
-        guided_anchors_list = []
+        guided_anchors_list = []#anchors是按图像的list
         loc_mask_list = []
         for img_id, img_meta in enumerate(img_metas):
             multi_level_guided_anchors = []
             multi_level_loc_mask = []
             for i in range(num_levels):
                 squares = squares_list[img_id][i]
-                shape_pred = shape_preds[i][img_id]
+                shape_pred = shape_preds[i][img_id]#shape_preds是一个list
                 loc_pred = loc_preds[i][img_id]
                 guided_anchors, loc_mask = self.get_guided_anchors_single(
                     squares,
                     shape_pred,
                     loc_pred,
                     use_loc_filter=use_loc_filter)
-                multi_level_guided_anchors.append(guided_anchors)
+                multi_level_guided_anchors.append(guided_anchors)#名字中有level就是按level的List
                 multi_level_loc_mask.append(loc_mask)
             guided_anchors_list.append(multi_level_guided_anchors)
             loc_mask_list.append(multi_level_loc_mask)
@@ -342,9 +362,9 @@ class GuidedAnchorHead(AnchorHead):
         # calculate guided anchors
         squares = squares[mask]
         anchor_deltas = shape_pred.permute(1, 2, 0).contiguous().view(
-            -1, 2).detach()[mask]
+            -1, 2).detach()[mask]#.permute后如果接view,就需要加上contiguous,也可以直接使用reshape
         bbox_deltas = anchor_deltas.new_full(squares.size(), 0)
-        bbox_deltas[:, 2:] = anchor_deltas
+        bbox_deltas[:, 2:] = anchor_deltas#相当于dx,dy=0,anchor_deltas是dw,dh
         guided_anchors = delta2bbox(
             squares,
             bbox_deltas,
@@ -353,6 +373,9 @@ class GuidedAnchorHead(AnchorHead):
             wh_ratio_clip=1e-6)
         return guided_anchors, mask
 
+    #先变形把形状变一致之后,根据bbox_anchors建立bbox_deltas的new_full
+    #再对bbox_deltas进行切片赋值，通过delta2bbox获得pred_anchors_，
+    #再把pred和target带入iou loss中
     def loss_shape_single(self, shape_pred, bbox_anchors, bbox_gts,
                           anchor_weights, anchor_total_num):
         shape_pred = shape_pred.permute(0, 2, 3, 1).contiguous().view(-1, 2)
@@ -374,8 +397,8 @@ class GuidedAnchorHead(AnchorHead):
             self.anchoring_stds,
             wh_ratio_clip=1e-6)
         loss_shape = self.loss_shape(
-            pred_anchors_,
-            bbox_gts_,
+            pred_anchors_,#(x,y,x,y) (k,4)
+            bbox_gts_,#(x,y,x,y)     (k,4)
             anchor_weights_,
             avg_factor=anchor_total_num)
         return loss_shape
@@ -406,22 +429,45 @@ class GuidedAnchorHead(AnchorHead):
 
         # get loc targets
         loc_targets, loc_weights, loc_avg_factor = ga_loc_target(
-            gt_bboxes,
-            featmap_sizes,
-            self.octave_base_scale,
-            self.anchor_strides,
-            center_ratio=cfg.center_ratio,
-            ignore_ratio=cfg.ignore_ratio)
+            gt_bboxes,#按图像的list
+            featmap_sizes,#按level的list (h,w)
+            self.octave_base_scale,#8
+            self.anchor_strides,#[4, 8, 16, 32, 64]
+            center_ratio=cfg.center_ratio,#0.2
+            ignore_ratio=cfg.ignore_ratio)#0.5
 
         # get sampled approxes
+        #get_sampled_approxs就是生成了按图像的List,每个里面是5个层级的anchors 每个的shape形如(k*9,4)
         approxs_list, inside_flag_list = self.get_sampled_approxs(
             featmap_sizes, img_metas, cfg)
         # get squares and guided anchors
+        #get_anchors生成的squares_list是按图像的List,每个里面是5个层级的anchors 每个层的shape形如(k,4)
+        #生成的guided_anchors_list是按图像的list,其中在每个图的每个层级上调用了get_guided_anchors_single生成guided_anchors和loc_mask
+        #首先根据是否要use_loc_filter，用loc_pred>=loc_filter_thr或0.0来生成loc_mask，permute后带入squares中
+        #定义bbox_deltas的大小为squares的大小初始化为0，再把anchor_deltas带入[:,2:]，即dw,dh的位置
+        #anchor_deltas是shape_preds.permute(1,2,0).contiguous().view(-1,2).detach()[mask]
+        #生成的loc_mask_list也是按图像的list
         squares_list, guided_anchors_list, _ = self.get_anchors(
             featmap_sizes, shape_preds, loc_preds, img_metas)
 
         # get shape targets
         sampling = False if not hasattr(cfg, 'ga_sampler') else True
+        #ga_shape_target在guided anchor_target中
+        #输入approxs_list和inside_flag_list,squares_list,gt_bboxes等
+        #首先把一个图像的approxs_list和inside_flag_list和squares_list cat到一个tensro
+        #调用ga_shape_target_single,构建assigner(approx_max_iou_assigner),在assign中
+        #先是把approxs view成(num_squares,9,4)即(k,9,4)再变成(9,k,4)最后变成(9*k,4)
+        #再对approxs和gt使用bbox_overlaps求出每个anchor的iou，再view(9,k,num_gts).max(dim=0)
+        #求出每个图像5层的approxs的每个位置上9个anchor的最大iou的值，再transpose成(num_gts,num_squares)
+        #这里在每个位置使用9个anchor来做assign的原因是：assign的结果会用来做loss，如果单纯只用squares
+        #因为squares的形状单一，可能有一些比较好的位置的squares会被assign成负样本，这样训练的时候也会被当成是负样本训练
+        #这样在生成guided_anchors的时候该位置就不会有anchors了，但实际上该位置的squares当形状改变时会有比较好的结果，所以
+        #就用9个anchors来做assign，为了保证这些有潜力的squares会被留下当成是正样本训练，在生成guided_anchors的时候也会生成比较好的guided_anchors
+        #再使用assign_wrt_overlaps去求出AssignResult
+        #再sample,注意此时sample的输入是根据approxs生成的AssignResult和squares
+        #定义bbox_anchors,bbox_gts,bbox_weights,把sampling_result.pos_inds作为索引值带入
+        #这三个中，赋值为sampling_result.pos_bboxes和sampling_result.pos_gt_bboxes和1.0
+        #再求出所有图像的被采样后的正样本数量和以及负样本数量和，最后再按level生成List,这是为了和pre的形状符合，便于loss
         shape_targets = ga_shape_target(
             approxs_list,
             inside_flag_list,
@@ -433,12 +479,20 @@ class GuidedAnchorHead(AnchorHead):
             sampling=sampling)
         if shape_targets is None:
             return None
+        #按层级的list,其中bbox_anchors_list每一个是(2,k,4)，这些由anchor生成的都不具备h,w形状所以是k,而pre有h,w的形状
+        #bbox_gts_list和anchor_weights_list每一个也都是(2,k,4)
+        #bbox_anchors_list的pos的位置是squares的(x,y,x,y)的坐标；bbox_gts_list是对应的gt的坐标，这才是target,而bbox_anchors_list是结合shap_pre生成坐标预测用的
         (bbox_anchors_list, bbox_gts_list, anchor_weights_list, anchor_fg_num,
-         anchor_bg_num) = shape_targets
+         anchor_bg_num) = shape_targets 
         anchor_total_num = (
             anchor_fg_num if not sampling else anchor_fg_num + anchor_bg_num)
 
         # get anchor targets
+        #anchor_targe和shape_targets类似，和在普通rpn中生成anchor_target一样，最后输出的
+        #是一个tuple,里面有labels_list, label_weights_list, bbox_targets_list,bbox_weights_list, num_total_pos, num_total_neg
+        #这些也都是做loss_cls和loss_bbox要用的
+        #按层级的list,其中labels_list每一个是(2,k)
+        #bbox_targets_list和bbox_weights_list每一个也都是(2,k,4) 
         sampling = False if self.cls_focal_loss else True
         label_channels = self.cls_out_channels if self.use_sigmoid_cls else 1
         cls_reg_targets = anchor_target(
@@ -462,24 +516,25 @@ class GuidedAnchorHead(AnchorHead):
             num_total_neg)
 
         # get classification and bbox regression losses
+        #以层级为单位，每个level中cls_scores为(2,1,h,w);bbox_preds为(2,4,h,w);labels_list为(2,k);bbox_targets_list为(2,k,4)
         losses_cls, losses_bbox = multi_apply(
-            self.loss_single,
-            cls_scores,
-            bbox_preds,
-            labels_list,
-            label_weights_list,
-            bbox_targets_list,
-            bbox_weights_list,
-            num_total_samples=num_total_samples,
+            self.loss_single,#在继承的anchor_head中
+            cls_scores,#(2,1,h,w)
+            bbox_preds,#(2,4,h,w)
+            labels_list,#(2,k)
+            label_weights_list,#(2,k)
+            bbox_targets_list,#(2,k,4)
+            bbox_weights_list,#(2,k,4)
+            num_total_samples=num_total_samples,#num_total_samples是所有图像的所有level的正负样本数量和，是因为求loss是按照level来的，每次level会求一个batch的Loss,之后再把所有的level的loss相加，这样就相当于是全都相加再除以总的num_total_samples
             cfg=cfg)
 
         # get anchor location loss
         losses_loc = []
         for i in range(len(loc_preds)):
             loss_loc = self.loss_loc_single(
-                loc_preds[i],
-                loc_targets[i],
-                loc_weights[i],
+                loc_preds[i],#(2,1,h,w)
+                loc_targets[i],#(2,1,h,w)
+                loc_weights[i],#(2,1,h,w)
                 loc_avg_factor=loc_avg_factor,
                 cfg=cfg)
             losses_loc.append(loss_loc)
@@ -488,10 +543,10 @@ class GuidedAnchorHead(AnchorHead):
         losses_shape = []
         for i in range(len(shape_preds)):
             loss_shape = self.loss_shape_single(
-                shape_preds[i],
-                bbox_anchors_list[i],
-                bbox_gts_list[i],
-                anchor_weights_list[i],
+                shape_preds[i],#(2,2,h,w) 是相对值dw,dh
+                bbox_anchors_list[i],#(2,k,4) 是绝对的坐标值 所以在该函数里面需要把
+                bbox_gts_list[i],#(2,k,4)
+                anchor_weights_list[i],#(2,k,4)
                 anchor_total_num=anchor_total_num)
             losses_shape.append(loss_shape)
 
@@ -504,10 +559,10 @@ class GuidedAnchorHead(AnchorHead):
     @force_fp32(
         apply_to=('cls_scores', 'bbox_preds', 'shape_preds', 'loc_preds'))
     def get_bboxes(self,
-                   cls_scores,
-                   bbox_preds,
-                   shape_preds,
-                   loc_preds,
+                   cls_scores,#rpn输出的pred都是按level的list
+                   bbox_preds,#rpn输出的pred都是按level的list
+                   shape_preds,#rpn输出的pred都是按level的list
+                   loc_preds,#rpn输出的pred都是按level的list
                    img_metas,
                    cfg,
                    rescale=False):
@@ -523,7 +578,7 @@ class GuidedAnchorHead(AnchorHead):
             img_metas,
             use_loc_filter=not self.training)
         result_list = []
-        for img_id in range(len(img_metas)):
+        for img_id in range(len(img_metas)):#对图像操作，取出cls_score_list，bbox_pred_list，guided_anchor_list，loc_mask_list的同一副图像下5个level的值
             cls_score_list = [
                 cls_scores[i][img_id].detach() for i in range(num_levels)
             ]
@@ -544,7 +599,7 @@ class GuidedAnchorHead(AnchorHead):
                                                scale_factor, cfg, rescale)
             result_list.append(proposals)
         return result_list
-
+    #下面的函数在ga_rpn_head中有定义
     def get_bboxes_single(self,
                           cls_scores,
                           bbox_preds,
@@ -557,6 +612,7 @@ class GuidedAnchorHead(AnchorHead):
         assert len(cls_scores) == len(bbox_preds) == len(mlvl_anchors)
         mlvl_bboxes = []
         mlvl_scores = []
+        #一次迭代的cls_scores:(1,h,w);bbox_preds:(4,h,w);mlvl_anchors：(k,4) 其中k=h*w ;mlvl_masks:(k,1)
         for cls_score, bbox_pred, anchors, mask in zip(cls_scores, bbox_preds,
                                                        mlvl_anchors,
                                                        mlvl_masks):
