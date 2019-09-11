@@ -88,12 +88,7 @@ class BaseDetector(nn.Module):
             return self.forward_test(img, img_meta, **kwargs)
 
     #下面的show_result只会是在show的时候才会进入,也就是不会rescale
-    def show_result(self,
-                    data,
-                    result,
-                    img_norm_cfg,
-                    dataset=None,
-                    score_thr=0.3):
+    def show_result(self, data, result, dataset=None, score_thr=0.3):
         if isinstance(result, tuple):
             bbox_result, segm_result = result
         else:
@@ -101,7 +96,9 @@ class BaseDetector(nn.Module):
 
         img_tensor = data['img'][0] #取出第一个图像(是tensor类型)，其实在test的时候一次也就一个图片
         img_metas = data['img_meta'][0].data[0]
-        imgs = tensor2imgs(img_tensor, **img_norm_cfg) #图像通过网络前要预处理就变成了tensor(在custom中),该函数就是把tensor重新变换维度,变成在cpu上,numpy格式，去归一化
+        
+        #图像通过网络前要预处理就变成了tensor(在custom中),该函数就是把tensor重新变换维度,变成在cpu上,numpy格式，去归一化
+        imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
         assert len(imgs) == len(img_metas)
 
         if dataset is None:

@@ -29,7 +29,7 @@ def single_gpu_test(model, data_loader, show=False):
         # reseult是list,results也是list,result里面是按照类分开的list，如：result[0]是(n,5),n代表该张图片中和该label一样的bbox的数量
         # results里面是所有的图像，所以results[0]代表的就是第一个图像的信息，是个list
         if show:
-            model.module.show_result(data, result, dataset.img_norm_cfg)
+            model.module.show_result(data, result)
 
         batch_size = data['img'][0].size(0)
         for _ in range(batch_size):
