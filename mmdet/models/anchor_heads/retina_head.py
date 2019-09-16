@@ -8,8 +8,8 @@ from .anchor_head import AnchorHead
 
 
 @HEADS.register_module
-class RetinaHead(AnchorHead):
-
+class RetinaHead(AnchorHead): 
+    #初始化后把传入的值赋值给属性，再super().__init__(),传入参数调用父类的初始化
     def __init__(self,
                  num_classes,
                  in_channels,
@@ -34,7 +34,7 @@ class RetinaHead(AnchorHead):
         self.relu = nn.ReLU(inplace=True)
         self.cls_convs = nn.ModuleList()
         self.reg_convs = nn.ModuleList()
-        for i in range(self.stacked_convs):
+        for i in range(self.stacked_convs): #retina_head对cls和reg堆叠的4个conv是分开的，不是共享的，可能是为了更有针对性
             chn = self.in_channels if i == 0 else self.feat_channels
             self.cls_convs.append(
                 ConvModule(
@@ -58,7 +58,7 @@ class RetinaHead(AnchorHead):
             self.feat_channels,
             self.num_anchors * self.cls_out_channels,
             3,
-            padding=1)
+            padding=1) #retinanet最后的cls和reg都是conv，不是fc，因为输入的不是roi，大小是不固定的
         self.retina_reg = nn.Conv2d(
             self.feat_channels, self.num_anchors * 4, 3, padding=1)
 

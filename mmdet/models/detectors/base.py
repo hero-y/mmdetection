@@ -87,20 +87,18 @@ class BaseDetector(nn.Module):
         else:
             return self.forward_test(img, img_meta, **kwargs)
 
-    def show_result(self,
-                    data,
-                    result,
-                    img_norm_cfg,
-                    dataset=None,
-                    score_thr=0.3):
+    #下面的show_result只会是在show的时候才会进入,也就是不会rescale
+    def show_result(self, data, result, dataset=None, score_thr=0.3):
         if isinstance(result, tuple):
             bbox_result, segm_result = result
         else:
             bbox_result, segm_result = result, None
 
-        img_tensor = data['img'][0]
+        img_tensor = data['img'][0] #取出第一个图像(是tensor类型)，其实在test的时候一次也就一个图片
         img_metas = data['img_meta'][0].data[0]
-        imgs = tensor2imgs(img_tensor, **img_norm_cfg)
+        
+        #图像通过网络前要预处理就变成了tensor(在custom中),该函数就是把tensor重新变换维度,变成在cpu上,numpy格式，去归一化
+        imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
         assert len(imgs) == len(img_metas)
 
         if dataset is None:
@@ -118,25 +116,29 @@ class BaseDetector(nn.Module):
             h, w, _ = img_meta['img_shape']
             img_show = img[:h, :w, :]
 
-            bboxes = np.vstack(bbox_result)
+            bboxes = np.vstack(bbox_result)  #垂直的把数组堆叠起来(n,5)，这是numpy堆叠数组的方式和torch不一样
             # draw segmentation masks
             if segm_result is not None:
-                segms = mmcv.concat_list(segm_result)
+                segms = mmcv.concat_list(segm_result) #segm_result是按类的list,每个类里面也是一个list,concat_list就是把这些list,变成一个list
                 inds = np.where(bboxes[:, -1] > score_thr)[0]
-                for i in inds:
+                for i in inds:#对每一个pro对应的mask操作，直接改变要展示的图片上的mask位置的rgb值
                     color_mask = np.random.randint(
-                        0, 256, (1, 3), dtype=np.uint8)
-                    mask = maskUtils.decode(segms[i]).astype(np.bool)
-                    img_show[mask] = img_show[mask] * 0.5 + color_mask * 0.5
+                        0, 256, (1, 3), dtype=np.uint8)#(1,3)代表一行3列，即rgb
+                    mask = maskUtils.decode(segms[i]).astype(np.bool)#解码出的是mask的位置
+                    img_show[mask] = img_show[mask] * 0.5 + color_mask * 0.5 #该mask位置的颜色值为原颜色值×0.5+随机生成的颜色值×0.5
             # draw bounding boxes
             labels = [
                 np.full(bbox.shape[0], i, dtype=np.int32)
                 for i, bbox in enumerate(bbox_result)
-            ]
+            ] #bbox_result仍然是按类的list,bboxes才是vstack后的
             labels = np.concatenate(labels)
-            mmcv.imshow_det_bboxes(
+            mmcv.imshow_det_bboxes( #输入图像img,bboxes(有score),labels,class_name,score_thr
                 img_show,
                 bboxes,
                 labels,
                 class_names=class_names,
-                score_thr=score_thr)
+                score_thr=score_thr,
+                bbox_color='blue',
+                text_color='white',
+                thickness=2
+                )

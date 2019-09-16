@@ -104,43 +104,50 @@ test_cfg = dict(
 dataset_type = 'CocoDataset'
 data_root = 'data/coco/'
 img_norm_cfg = dict(
-    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)  #图像初始化，减去均值除以方差
+    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True) # 图像初始化，减去均值除以方差
+train_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', with_bbox=True),
+    dict(type='Resize', img_scale=(1333, 800), keep_ratio=True),#将较大者/图像中h,w的较大者  将较小者/图像中h,w的较小者  选择较小的作为放大比例 ，效果就是在没有pad之前，当img的长边等于大值时，短边就会小于小值，当img的短边等于小值时，长边就会小于大值
+    dict(type='RandomFlip', flip_ratio=0.5),# 左右翻转的概率,再dataset.transform中设定，随机值和flip_ratio比较，来判断概率
+    dict(type='Normalize', **img_norm_cfg), 
+    dict(type='Pad', size_divisor=32), # 对图像resize时的最小单位，所有图像都会被resize成32的倍数,这个即使形成的pad_shape
+    dict(type='DefaultFormatBundle'),
+    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
+]
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(
+        type='MultiScaleFlipAug',
+        img_scale=(1333, 800),
+        flip=False,
+        transforms=[
+            dict(type='Resize', keep_ratio=True),
+            dict(type='RandomFlip'),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='Pad', size_divisor=32),
+            dict(type='ImageToTensor', keys=['img']),
+            dict(type='Collect', keys=['img']),
+        ])
+]
 data = dict(
     imgs_per_gpu=2,
     workers_per_gpu=2, #一个gpu的线程数，线程数越多处理的越快
     train=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_train2017.json',
-        img_prefix=data_root + 'train2017/',  #图片前缀，即图片的路径
-        img_scale=(400, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32, #对图像resize时的最小单位，所有图像都会被resize成32的倍数,这个即使形成的pad_shape
-        flip_ratio=0.5, #左右翻转的概率,再dataset.transform中设定，随机值和flip_ratio比较，来判断概率
-        with_mask=False,  #训练时附带mask
-        with_crowd=True,  #训练时附带difficult的样本
-        with_label=True), #训练时附带label
+        img_prefix=data_root + 'train2017/', # 图片前缀，即图片的路径
+        pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_val2017.json',
         img_prefix=data_root + 'val2017/',
-        img_scale=(1333, 800), #将较大者/图像中h,w的较大者  将较小者/图像中h,w的较小者  选择较小的作为放大比例 ，效果就是在没有pad之前，当img的长边等于大值时，短边就会小于小值，当img的短边等于小值时，长边就会小于大值
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0,
-        with_mask=False,
-        with_crowd=True,
-        with_label=True),
+        pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_val2017.json',
         img_prefix=data_root + 'val2017/',
-        img_scale=(1333, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0,
-        with_mask=False,
-        with_label=False,
-        test_mode=True))
+        pipeline=test_pipeline))
 # optimizer gpu=8时 lr=0.02, gpu=4时 lr=0.01， gpu=1时 lr=0.0025
 optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))  #梯度均衡参数

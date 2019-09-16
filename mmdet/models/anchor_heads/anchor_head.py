@@ -230,7 +230,7 @@ class AnchorHead(nn.Module):
         for img_id in range(len(img_metas)):
             cls_score_list = [
                 cls_scores[i][img_id].detach() for i in range(num_levels)
-            ]  #.detach()是阻断反向传播
+            ]  #.detach()是阻断反向传播,detach()用于返回一个新的从当前的Variable图中分离的Variable，返回的Variable不需要梯度
             bbox_pred_list = [
                 bbox_preds[i][img_id].detach() for i in range(num_levels)
             ]
@@ -260,7 +260,7 @@ class AnchorHead(nn.Module):
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
             cls_score = cls_score.permute(1, 2,
                                           0).reshape(-1, self.cls_out_channels)
-            #.permute(1,2,0)的目的是把通道维数放到款的位置，所以就是最先被取出来的，所以把一个位置的anchor放到一起
+            #.permute(1,2,0)的目的是把通道维数放到最后的位置，所以就是最先被取出来的，所以把一个位置的anchor放到一起
             if self.use_sigmoid_cls:
                 scores = cls_score.sigmoid()  #二分类问题，使用sigmoid将pred限制在(0,1)
             else:

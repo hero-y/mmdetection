@@ -4,7 +4,12 @@ from ..registry import HEADS
 from ..utils import ConvModule
 from .bbox_head import BBoxHead
 
-
+"""
+Faster rcnn的bbox是两个shared_fcs+fc_cls+fc_reg
+有四个部分：共享，分类，回归，最后的两个fc
+前三个部分又都由fc和conv组成，每个部分是否有fc或conv，有多少是根据传进来的参量决定的。
+最后的两个fc分别是cls和reg的预测必须有
+"""
 @HEADS.register_module
 class ConvFCBBoxHead(BBoxHead):
     """More general bbox head, with shared conv and fc layers and two optional
@@ -55,7 +60,7 @@ class ConvFCBBoxHead(BBoxHead):
                 True)
         self.shared_out_channels = last_layer_dim
 
-        # add cls specific branch
+        # add cls specific branch 
         self.cls_convs, self.cls_fcs, self.cls_last_dim = \
             self._add_conv_fc_branch(
                 self.num_cls_convs, self.num_cls_fcs, self.shared_out_channels)

@@ -13,19 +13,19 @@ model = dict(
         type='FPN',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
-        start_level=1,
+        start_level=1,#该变量使得fpn的操作从C3开始(resnet共C1-C5)
         add_extra_convs=True,
         num_outs=5),
     bbox_head=dict(
         type='RetinaHead',
         num_classes=81,
         in_channels=256,
-        stacked_convs=4,
+        stacked_convs=4,#堆积4个conv,这个是在retina_head中的
         feat_channels=256,
-        octave_base_scale=4,
-        scales_per_octave=3,
+        octave_base_scale=4,#octave是变化的意思，变化的基本的尺寸，从某种程度上也就算是anchor_scale
+        scales_per_octave=3,#变化的个数
         anchor_ratios=[0.5, 1.0, 2.0],
-        anchor_strides=[8, 16, 32, 64, 128],
+        anchor_strides=[8, 16, 32, 64, 128],#因为从C3开始的，所以stride是从8开始的
         target_means=[.0, .0, .0, .0],
         target_stds=[1.0, 1.0, 1.0, 1.0],
         loss_cls=dict(
@@ -34,7 +34,7 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=1.0),
-        loss_bbox=dict(type='SmoothL1Loss', beta=0.11, loss_weight=1.0)))
+        loss_bbox=dict(type='SmoothL1Loss', beta=0.11, loss_weight=1.0)))#把beta设置的很小，可能是因为单阶段的网络的loss值相对会大一点，所以要把beta设置的小一点，就像二阶段的rpn中的SmoothL1Loss中beta一样
 # training and testing settings
 train_cfg = dict(
     assigner=dict(
@@ -43,7 +43,7 @@ train_cfg = dict(
         neg_iou_thr=0.4,
         min_pos_iou=0,
         ignore_iof_thr=-1),
-    allowed_border=-1,
+    allowed_border=-1, 
     pos_weight=-1,
     debug=False)
 test_cfg = dict(
@@ -57,6 +57,31 @@ dataset_type = 'CocoDataset'
 data_root = 'data/coco/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
+train_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', with_bbox=True),
+    dict(type='Resize', img_scale=(1333, 800), keep_ratio=True),
+    dict(type='RandomFlip', flip_ratio=0.5),
+    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Pad', size_divisor=32),
+    dict(type='DefaultFormatBundle'),
+    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
+]
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(
+        type='MultiScaleFlipAug',
+        img_scale=(1333, 800),
+        flip=False,
+        transforms=[
+            dict(type='Resize', keep_ratio=True),
+            dict(type='RandomFlip'),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='Pad', size_divisor=32),
+            dict(type='ImageToTensor', keys=['img']),
+            dict(type='Collect', keys=['img']),
+        ])
+]
 data = dict(
     imgs_per_gpu=2,
     workers_per_gpu=2,
@@ -64,36 +89,17 @@ data = dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_train2017.json',
         img_prefix=data_root + 'train2017/',
-        img_scale=(1333, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0.5,
-        with_mask=False,
-        with_crowd=False,
-        with_label=True),
+        pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_val2017.json',
         img_prefix=data_root + 'val2017/',
-        img_scale=(1333, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0,
-        with_mask=False,
-        with_crowd=False,
-        with_label=True),
+        pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_val2017.json',
         img_prefix=data_root + 'val2017/',
-        img_scale=(1333, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0,
-        with_mask=False,
-        with_crowd=False,
-        with_label=False,
-        test_mode=True))
+        pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
@@ -107,7 +113,7 @@ lr_config = dict(
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
-    interval=50,
+    interval=1,
     hooks=[
         dict(type='TextLoggerHook'),
         # dict(type='TensorboardLoggerHook')

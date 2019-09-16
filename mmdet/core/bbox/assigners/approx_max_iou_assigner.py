@@ -87,19 +87,21 @@ class ApproxMaxIoUAssigner(MaxIoUAssigner):
         num_squares = squares.size(0)
         num_gts = gt_bboxes.size(0)
         # re-organize anchors by approxs_per_octave x num_squares
+        #view成(num_squares,9,4)即(k,9,4)再变成(9,k,4)最后变成(9*k,4)的原因是接下来求出的bbox_overlaps要对那9个dim求max,
+        #所以变成(9*k,4)比较方便，而要变成这个样子不能直接view，而是需要先view,再transpose，最后再view
         approxs = torch.transpose(
             approxs.view(num_squares, approxs_per_octave, 4), 0,
             1).contiguous().view(-1, 4)
-        all_overlaps = bbox_overlaps(approxs, gt_bboxes)
+        all_overlaps = bbox_overlaps(approxs, gt_bboxes)#(n,m) n是9×num_squares   m是gt的数量
 
         overlaps, _ = all_overlaps.view(approxs_per_octave, num_squares,
                                         num_gts).max(dim=0)
-        overlaps = torch.transpose(overlaps, 0, 1)
+        overlaps = torch.transpose(overlaps, 0, 1)#(num_gts,num_squares)
 
         bboxes = squares[:, :4]
 
         if (self.ignore_iof_thr > 0) and (gt_bboxes_ignore is not None) and (
-                gt_bboxes_ignore.numel() > 0):
+                gt_bboxes_ignore.numel() > 0):#guide anchor不进入
             if self.ignore_wrt_candidates:
                 ignore_overlaps = bbox_overlaps(
                     bboxes, gt_bboxes_ignore, mode='iof')
@@ -110,5 +112,5 @@ class ApproxMaxIoUAssigner(MaxIoUAssigner):
                 ignore_max_overlaps, _ = ignore_overlaps.max(dim=0)
             overlaps[:, ignore_max_overlaps > self.ignore_iof_thr] = -1
 
-        assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)
+        assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)#AssignResult
         return assign_result

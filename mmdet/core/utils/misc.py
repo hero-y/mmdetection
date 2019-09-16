@@ -30,7 +30,7 @@ def unmap(data, count, inds, fill=0):
     if data.dim() == 1:
         ret = data.new_full((count, ), fill)
         ret[inds] = data
-    else:
+    else:#进入
         new_size = (count, ) + data.size()[1:]
         ret = data.new_full(new_size, fill)
         ret[inds, :] = data

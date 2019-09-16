@@ -23,11 +23,13 @@ def single_gpu_test(model, data_loader, show=False):
     prog_bar = mmcv.ProgressBar(len(dataset))
     for i, data in enumerate(data_loader):
         with torch.no_grad():
-            result = model(return_loss=False, rescale=not show, **data)
-        results.append(result)
-
+            #rescale是not show,即在不展示图片时,就把bbox_result和segm_result都变回原大小(因为test的预处理的时候已经把图片放大到1333,800,用rescale相当于是把得到的结果缩小)
+            result = model(return_loss=False, rescale=not show, **data) #result是按类的bbox的list,其中bbox包含了score
+        results.append(result) 
+        # reseult是list,results也是list,result里面是按照类分开的list，如：result[0]是(n,5),n代表该张图片中和该label一样的bbox的数量
+        # results里面是所有的图像，所以results[0]代表的就是第一个图像的信息，是个list
         if show:
-            model.module.show_result(data, result, dataset.img_norm_cfg)
+            model.module.show_result(data, result)
 
         batch_size = data['img'][0].size(0)
         for _ in range(batch_size):
@@ -198,8 +200,8 @@ def main():
                 coco_eval(result_file, eval_types, dataset.coco)
             else:
                 if not isinstance(outputs[0], dict):
-                    result_files = results2json(dataset, outputs, args.out)
-                    coco_eval(result_files, eval_types, dataset.coco)
+                    result_files = results2json(dataset, outputs, args.out) #dataset是数据集的实例
+                    coco_eval(result_files, eval_types, dataset.coco) #dataset.coco是COCO(ann_file)
                 else:
                     for name in outputs[0]:
                         print('\nEvaluating {}'.format(name))

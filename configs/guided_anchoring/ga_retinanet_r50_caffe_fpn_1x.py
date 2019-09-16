@@ -24,10 +24,10 @@ model = dict(
         in_channels=256,
         stacked_convs=4,
         feat_channels=256,
-        octave_base_scale=4,
+        octave_base_scale=4,#和RetinaNet一样是4，因为anchor_strides的起始是8，所以二者相乘为32，这和faster_rcnn的8*4是一样的，因为这代表了最小的物体的scale
         scales_per_octave=3,
         octave_ratios=[0.5, 1.0, 2.0],
-        anchor_strides=[8, 16, 32, 64, 128],
+        anchor_strides=[8, 16, 32, 64, 128],#和RetinaNet一样
         anchor_base_sizes=None,
         anchoring_means=[.0, .0, .0, .0],
         anchoring_stds=[1.0, 1.0, 1.0, 1.0],
@@ -47,7 +47,7 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=1.0),
-        loss_bbox=dict(type='SmoothL1Loss', beta=0.04, loss_weight=1.0)))
+        loss_bbox=dict(type='SmoothL1Loss', beta=0.04, loss_weight=1.0)))#为什么beta设置的这么小，可能是在ga_retinanet中即使有guided anchors,但做Loss的anchor依旧很多所以beta还是要设置的小一点？？
 # training and testing settings
 train_cfg = dict(
     ga_assigner=dict(
@@ -84,6 +84,31 @@ dataset_type = 'CocoDataset'
 data_root = 'data/coco/'
 img_norm_cfg = dict(
     mean=[102.9801, 115.9465, 122.7717], std=[1.0, 1.0, 1.0], to_rgb=False)
+train_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', with_bbox=True),
+    dict(type='Resize', img_scale=(1333, 800), keep_ratio=True),
+    dict(type='RandomFlip', flip_ratio=0.5),
+    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Pad', size_divisor=32),
+    dict(type='DefaultFormatBundle'),
+    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
+]
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(
+        type='MultiScaleFlipAug',
+        img_scale=(1333, 800),
+        flip=False,
+        transforms=[
+            dict(type='Resize', keep_ratio=True),
+            dict(type='RandomFlip'),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='Pad', size_divisor=32),
+            dict(type='ImageToTensor', keys=['img']),
+            dict(type='Collect', keys=['img']),
+        ])
+]
 data = dict(
     imgs_per_gpu=2,
     workers_per_gpu=2,
@@ -91,36 +116,17 @@ data = dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_train2017.json',
         img_prefix=data_root + 'train2017/',
-        img_scale=(1333, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0.5,
-        with_mask=False,
-        with_crowd=False,
-        with_label=True),
+        pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_val2017.json',
         img_prefix=data_root + 'val2017/',
-        img_scale=(1333, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0,
-        with_mask=False,
-        with_crowd=False,
-        with_label=True),
+        pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_val2017.json',
         img_prefix=data_root + 'val2017/',
-        img_scale=(1333, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0,
-        with_mask=False,
-        with_crowd=False,
-        with_label=False,
-        test_mode=True))
+        pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))

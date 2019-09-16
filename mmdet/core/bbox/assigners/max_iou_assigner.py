@@ -161,3 +161,55 @@ class MaxIoUAssigner(BaseAssigner):
 
         return AssignResult(
             num_gts, assigned_gt_inds, max_overlaps, labels=assigned_labels)
+
+    #在dis_cascade_rcnn中为了获知每个proposal的iou，并按照iou的大小分类，所写的函数    
+    def get_proposal_iou(self, bboxes, gt_bboxes, gt_bboxes_ignore=None, gt_labels=None):
+        bboxes = bboxes[:, :4]
+        overlaps = bbox_overlaps(gt_bboxes, bboxes)
+        num_gts, num_bboxes = overlaps.size(0), overlaps.size(1) 
+        assigned_gt_inds = overlaps.new_full((num_bboxes, ),
+                                            -1,
+                                            dtype=torch.long)
+        max_overlaps, argmax_overlaps = overlaps.max(dim=0) 
+        gt_max_overlaps, gt_argmax_overlaps = overlaps.max(dim=1)  
+        if isinstance(self.neg_iou_thr, float):  #判断变量是tuple还是float的好办法 ：isinstance
+            assigned_gt_inds[(max_overlaps >= 0)
+                            & (max_overlaps < self.neg_iou_thr)] = 0    
+        pos_inds = max_overlaps >= self.pos_iou_thr
+        assigned_gt_inds[pos_inds] = argmax_overlaps[pos_inds] + 1
+        for i in range(num_gts):
+            if gt_max_overlaps[i] >= self.min_pos_iou:
+                if self.gt_max_assign_all:
+                    max_iou_inds = overlaps[i, :] == gt_max_overlaps[i]
+                    assigned_gt_inds[max_iou_inds] = i + 1  #这个if的意思是：或许一个gt会存在有多个proposal的iou的值是最大的(相等的)，这个if是把这些proposal都设置Ind
+                else:                                       #+1是因为gt的排序默认是从0开始的，所以要+1，让它从1开始
+                    assigned_gt_inds[gt_argmax_overlaps[i]] = i + 1
+        
+        pos_inds = assigned_gt_inds[:] > 0
+        neg_inds = assigned_gt_inds[:] <= 0
+        pos_bboxes = bboxes[pos_inds]
+        neg_bboxes = bboxes[neg_inds]
+        gt_inds = assigned_gt_inds[pos_inds]
+
+        def bbox_overlap(bboxes1,bboxes2):
+            lt = torch.max(bboxes1[:2], bboxes2[:2]) 
+            rb = torch.min(bboxes1[2:], bboxes2[2:]) 
+            wh = (rb - lt + 1).clamp(min=0)  # [rows, 2]
+            overlap = wh[0] * wh[1]
+            area1 = (bboxes1[2] - bboxes1[0] + 1) * (
+                bboxes1[3] - bboxes1[1] + 1)
+            area2 = (bboxes2[2] - bboxes2[0] + 1) * (
+                bboxes2[3] - bboxes2[1] + 1)
+            iou = overlap / (area1 + area2 - overlap)
+            return iou
+
+        pos_ious = torch.full((len(pos_bboxes),),0,dtype=torch.float)
+        for i, (bbox, gt_ind) in enumerate(zip(pos_bboxes,gt_inds)):
+            iou = bbox_overlap(gt_bboxes[gt_ind-1],bbox)
+            pos_ious[i] = iou
+        proposal_one_stage= pos_bboxes[pos_ious[:] < 0.6]
+        proposal_two_stage= pos_bboxes[((pos_ious[:] >= 0.6) & (pos_ious[:] < 0.7)) ]
+        proposal_three_stage= pos_bboxes[pos_ious[:] >= 0.7]
+        proposal_one_stage = torch.cat([proposal_one_stage,neg_bboxes],dim = 0) 
+        return proposal_one_stage,proposal_two_stage,proposal_three_stage
+                                    

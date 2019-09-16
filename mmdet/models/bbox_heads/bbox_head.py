@@ -135,6 +135,7 @@ class BBoxHead(nn.Module):
                 reduction_override=reduction_override)
         return losses
 
+    #在test中用,softmax+delta2bbox+rescale+multiclass_nms
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def get_det_bboxes(self,
                        rois,
@@ -147,6 +148,7 @@ class BBoxHead(nn.Module):
         if isinstance(cls_score, list):
             cls_score = sum(cls_score) / float(len(cls_score))
         scores = F.softmax(cls_score, dim=1) if cls_score is not None else None
+        #F.softmax(cls_score,dim=1)对score作调整
 
         if bbox_pred is not None:
             bboxes = delta2bbox(rois[:, 1:], bbox_pred, self.target_means,
@@ -166,12 +168,17 @@ class BBoxHead(nn.Module):
         if cfg is None:
             return bboxes, scores
         else:
+            #在cascade_rcnn中bboxes是(n,4),scores是(n,num_class)
+            #在faster_rcnn中bboxes是(n,4*num_class),scores是(n,num_class)
             det_bboxes, det_labels = multiclass_nms(bboxes, scores,
                                                     cfg.score_thr, cfg.nms,
                                                     cfg.max_per_img)
 
             return det_bboxes, det_labels
 
+    #refine_bboxes在cascade_rcnn的train中使用,为了生成下一个阶段的proposal_list,在两个bbox_head之间用，一共用了两次
+    #为了对图像单独操作，首先通过rois[:,0]求出不同图像的序号，分别带入rois,label,bbox_pred,调用regress_by_class
+    #再把gt_bboxes滤出掉
     @force_fp32(apply_to=('bbox_preds', ))
     def refine_bboxes(self, rois, labels, bbox_preds, pos_is_gts, img_metas):
         """Refine bboxes during training.
@@ -192,27 +199,33 @@ class BBoxHead(nn.Module):
         assert img_ids.numel() == len(img_metas)
 
         bboxes_list = []
-        for i in range(len(img_metas)):
-            inds = torch.nonzero(rois[:, 0] == i).squeeze()
+        for i in range(len(img_metas)): #一幅一幅图像单独操作
+            inds = torch.nonzero(rois[:, 0] == i).squeeze() #把对应图像的rois的序号取出来
             num_rois = inds.numel()
 
             bboxes_ = rois[inds, 1:]
             label_ = labels[inds]
-            bbox_pred_ = bbox_preds[inds]
+            bbox_pred_ = bbox_preds[inds] #(n,81*4)
             img_meta_ = img_metas[i]
             pos_is_gts_ = pos_is_gts[i]
 
             bboxes = self.regress_by_class(bboxes_, label_, bbox_pred_,
-                                           img_meta_)
+                                           img_meta_) #(n,4)
             # filter gt bboxes
-            pos_keep = 1 - pos_is_gts_
-            keep_inds = pos_is_gts_.new_ones(num_rois)
-            keep_inds[:len(pos_is_gts_)] = pos_keep
+            #pos_is_gts的大小是正样本的个数，正样本里面包含了gt和其余的pro的正样本，1则代表是gt,0则代表不是，例如[1,1,1,0,0,0,0,0]
+            pos_keep = 1 - pos_is_gts_ #把gt的位置滤出掉，是因为该bboxex_list会被当做proposal再来一遍assign和sample,而assign的时候还会再一遍添加gt进去，所以在这里要滤出掉，防止重复
+            keep_inds = pos_is_gts_.new_ones(num_rois) #先初步建立要代入的序号的形状
+            keep_inds[:len(pos_is_gts_)] = pos_keep #然后再在特定位置赋值做出改变，因为rois是按照先正样本再负样本拼接的，所以bboxes也是这样的，所以keep_inds就可以把前len(pos_is_gts_)赋值
 
             bboxes_list.append(bboxes[keep_inds])
 
         return bboxes_list
 
+    #regress_by_class按类回归
+    #在cascade的train的时候调用的refine_bboxes中调用了它，此时它进入if rois.size(1) == 4:
+    #在cascade_rcnn的test的时候单独调用了它，此时进入else:
+    #对于if not self.reg_class_agnostic:在正常的cascade中不会进入
+    #这个判断里面的内容是：如果bbox_pred对每个类都预测了bbox,就按照label把对应的bbox取出来,再delta2bbox
     @force_fp32(apply_to=('bbox_pred', ))
     def regress_by_class(self, rois, label, bbox_pred, img_meta):
         """Regress the bbox for the predicted class. Used in Cascade R-CNN.
@@ -227,19 +240,23 @@ class BBoxHead(nn.Module):
             Tensor: Regressed bboxes, the same shape as input rois.
         """
         assert rois.size(1) == 4 or rois.size(1) == 5
-
-        if not self.reg_class_agnostic:
+        
+        if not self.reg_class_agnostic: #在cascade中不进入
             label = label * 4
             inds = torch.stack((label, label + 1, label + 2, label + 3), 1)
             bbox_pred = torch.gather(bbox_pred, 1, inds)
+            #如果进入这里就代表输入的bbox_pred是(n,81*4),inds是(n,4),torch.gather的目的就是为了把bbox_pred中每个bbox所对应
+            #的label的那四个坐标取出来,四个坐标是连续放在一起的,所以label,label+1,label+2,label+3
+            #输出的bbox_pred是(n,4)
+            #torch.gather准确说：dim=1就是对列进行操作,对第一行来说,分别取出label,label+1..(也就是inds的第一行)对应的位置
         assert bbox_pred.size(1) == 4
 
-        if rois.size(1) == 4:
+        if rois.size(1) == 4: #在train的时候是调用refine_bboxes来进入regress_by_class,其中输入的rois是bboxes,所以进入
             new_rois = delta2bbox(rois, bbox_pred, self.target_means,
                                   self.target_stds, img_meta['img_shape'])
-        else:
+        else: #在test的时候直接调用的就是regress_by_class,输入的就是rois，所以进入这个
             bboxes = delta2bbox(rois[:, 1:], bbox_pred, self.target_means,
-                                self.target_stds, img_meta['img_shape'])
-            new_rois = torch.cat((rois[:, [0]], bboxes), dim=1)
+                                self.target_stds, img_meta['img_shape']) #先用rois的后四个坐标操作
+            new_rois = torch.cat((rois[:, [0]], bboxes), dim=1) #再和第一个坐标重新拼回到一起
 
         return new_rois

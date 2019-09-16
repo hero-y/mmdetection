@@ -1,7 +1,7 @@
 # model settings
 model = dict(
     type='FasterRCNN',
-    pretrained='open-mmlab://resnet50_caffe',
+    pretrained=None,#'open-mmlab://resnet50_caffe'
     backbone=dict(
         type='ResNet',
         depth=50,
@@ -39,7 +39,7 @@ model = dict(
         loss_shape=dict(type='BoundedIoULoss', beta=0.2, loss_weight=1.0),
         loss_cls=dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0),
-        loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
+        loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),#因为使用guide anchor后,做loss用的target已经比较好了,所以beta=1.0
     bbox_roi_extractor=dict(
         type='SingleRoIExtractor',
         roi_layer=dict(type='RoIAlign', out_size=7, sample_num=2),
@@ -63,13 +63,13 @@ train_cfg = dict(
     rpn=dict(
         ga_assigner=dict(
             type='ApproxMaxIoUAssigner',
-            pos_iou_thr=0.7,
+            pos_iou_thr=0.7,#pos_iou_thr使用0.7,neg_iou_thr使用0.3,是因为rpn中主要是为了判断是物体还是不是物体，所以选择比较鲜明的样本训练
             neg_iou_thr=0.3,
             min_pos_iou=0.3,
             ignore_iof_thr=-1),
         ga_sampler=dict(
             type='RandomSampler',
-            num=256,
+            num=256,#256是一副图像所有的level，正负样本加起来是256个
             pos_fraction=0.5,
             neg_pos_ub=-1,
             add_gt_as_proposals=False),
@@ -94,19 +94,19 @@ train_cfg = dict(
         nms_across_levels=False,
         nms_pre=2000,
         nms_post=2000,
-        max_num=300,
+        max_num=300,#仅使用top300的proposal,因为guide anchor生成的pro基本都在物体附近,iou的质量也比较好,
         nms_thr=0.7,
         min_bbox_size=0),
     rcnn=dict(
         assigner=dict(
             type='MaxIoUAssigner',
-            pos_iou_thr=0.6,
-            neg_iou_thr=0.6,
+            pos_iou_thr=0.6,#阈值设置的大一点，因为此时的proposal的质量都比较高,iou>0.6的proposal依旧很多,不用担心会过拟合（普通的rpn如果直接设置0.6,效果会不如0.5,因为rpn生成的大于0.6的pro比较少）
+            neg_iou_thr=0.6,#在rcnn中pos和neg的阈值设置的一样是为了让训练出的效果是把除了正样本之外的都当做是负样本
             min_pos_iou=0.6,
             ignore_iof_thr=-1),
         sampler=dict(
             type='RandomSampler',
-            num=256,
+            num=256,#数量也变少了
             pos_fraction=0.25,
             neg_pos_ub=-1,
             add_gt_as_proposals=True),
@@ -125,8 +125,37 @@ test_cfg = dict(
 # dataset settings
 dataset_type = 'CocoDataset'
 data_root = 'data/coco/'
+#当使用的是caffe的预训练模型时,to_rgb=False,因为caffe出现的比较早,兼容了opencv用的是bgr,而对于torch来说to_rgb=True
+#当to_rgb=False时：mean=[102.9801, 115.9465, 122.7717], std=[1.0, 1.0, 1.0]
+#当to_rgb=True时：mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375]
+#可以看出对于mean来说只是把第一个和第三个位置换了一下,数值大小差不多,std3个之间差不多
 img_norm_cfg = dict(
     mean=[102.9801, 115.9465, 122.7717], std=[1.0, 1.0, 1.0], to_rgb=False)
+train_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', with_bbox=True),
+    dict(type='Resize', img_scale=(1333, 800), keep_ratio=True),
+    dict(type='RandomFlip', flip_ratio=0.5),
+    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Pad', size_divisor=32),
+    dict(type='DefaultFormatBundle'),
+    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
+]
+test_pipeline = [
+    dict(type='LoadImageFromFile'),
+    dict(
+        type='MultiScaleFlipAug',
+        img_scale=(1333, 800),
+        flip=False,
+        transforms=[
+            dict(type='Resize', keep_ratio=True),
+            dict(type='RandomFlip'),
+            dict(type='Normalize', **img_norm_cfg),
+            dict(type='Pad', size_divisor=32),
+            dict(type='ImageToTensor', keys=['img']),
+            dict(type='Collect', keys=['img']),
+        ])
+]
 data = dict(
     imgs_per_gpu=2,
     workers_per_gpu=2,
@@ -134,35 +163,17 @@ data = dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_train2017.json',
         img_prefix=data_root + 'train2017/',
-        img_scale=(1333, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0.5,
-        with_mask=False,
-        with_crowd=True,
-        with_label=True),
+        pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_val2017.json',
         img_prefix=data_root + 'val2017/',
-        img_scale=(1333, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0,
-        with_mask=False,
-        with_crowd=True,
-        with_label=True),
+        pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         ann_file=data_root + 'annotations/instances_val2017.json',
         img_prefix=data_root + 'val2017/',
-        img_scale=(1333, 800),
-        img_norm_cfg=img_norm_cfg,
-        size_divisor=32,
-        flip_ratio=0,
-        with_mask=False,
-        with_label=False,
-        test_mode=True))
+        pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
@@ -176,7 +187,7 @@ lr_config = dict(
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
-    interval=50,
+    interval=1,
     hooks=[
         dict(type='TextLoggerHook'),
         # dict(type='TensorboardLoggerHook')

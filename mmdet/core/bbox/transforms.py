@@ -46,7 +46,7 @@ def bbox2delta(proposals, gt, means=[0, 0, 0, 0], stds=[1, 1, 1, 1]):
 """
 把roi或者anchor转换成算是预测的框的位置
 先要把rois从(x,y,x,y)变成(x,y,w,h)才能和delta做操作，gw = pw*dw.exp(),gx = torch.addcmul(px,1,pw,dx)
-接着在把(x,y,w,h)变回(x,y,x,y),此时杜宇左上角的x,y要各加0.5，右下角的xy要各减0.5，而在上面的bbox2delta中从x,y变w,h时，要各加1
+接着在把(x,y,w,h)变回(x,y,x,y),此时左上角的x,y要各加0.5，右下角的xy要各减0.5，而在上面的bbox2delta中从x,y变w,h时，要各加1
 """
 def delta2bbox(rois,
                deltas,

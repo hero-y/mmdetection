@@ -51,7 +51,7 @@ class CocoDataset(CustomDataset):
         img_id = self.img_infos[idx]['id']
         ann_ids = self.coco.getAnnIds(imgIds=[img_id])
         ann_info = self.coco.loadAnns(ann_ids)
-        return self._parse_ann_info(ann_info, self.with_mask)
+        return self._parse_ann_info(self.img_infos[idx], ann_info)
 
     def _filter_imgs(self, min_size=32):
         """Filter images too small or without ground truths."""
@@ -63,14 +63,15 @@ class CocoDataset(CustomDataset):
             if min(img_info['width'], img_info['height']) >= min_size:
                 valid_inds.append(i)
         return valid_inds
-    
+
     #ann中有ann+img+category等类，每个里面都有多个分类
     #Img主要参数是img_id,h,w
     #ann的主要参数是bbox,img_id,cat_id,id
     #cat的主要参数是cat_id
     #一个ann代表的是一个Bbox的主要参数，所以一个img可以有多个ann，可以通过ann的img_id来知道在那个id中，通过cat_id，知道该Bbox是哪个类
     #返回一个dict
-    def _parse_ann_info(self, ann_info, with_mask=True):
+    def _parse_ann_info(self, img_info, ann_info):
+        
         """Parse bbox and mask annotation.
 
         Args:
@@ -79,40 +80,29 @@ class CocoDataset(CustomDataset):
 
         Returns:
             dict: A dict containing the following keys: bboxes, bboxes_ignore,
-                labels, masks, mask_polys, poly_lens.
+                labels, masks, seg_map. "masks" are raw annotations and not
+                decoded into binary masks.
         """
         gt_bboxes = []
         gt_labels = []
         gt_bboxes_ignore = []
-        # Two formats are provided.
-        # 1. mask: a binary map of the same size of the image.
-        # 2. polys: each mask consists of one or several polys, each poly is a
-        # list of float.
-        if with_mask:
-            gt_masks = []
-            gt_mask_polys = []
-            gt_poly_lens = []
+        gt_masks_ann = []
+
         for i, ann in enumerate(ann_info):
             if ann.get('ignore', False):
                 continue
             x1, y1, w, h = ann['bbox']
             if ann['area'] <= 0 or w < 1 or h < 1:
                 continue
-            #根据左上角坐标和宽高求右下角坐标时，要减1
-            bbox = [x1, y1, x1 + w - 1, y1 + h - 1]  #bbox在annotation的文件中是(x1,y1,w,h)即左上角坐标和宽高值，在提取每个batch的时候就转变成左上和右下坐标了
-            if ann['iscrowd']:
+            #bbox在annotation的文件中是(x1,y1,w,h)即左上角坐标和宽高值，在提取每个batch的时候就转变成左上和右下坐标了
+            bbox = [x1, y1, x1 + w - 1, y1 + h - 1]#根据左上角坐标和宽高求右下角坐标时，要减1
+            if ann.get('iscrowd', False):
                 gt_bboxes_ignore.append(bbox)
             else:
                 gt_bboxes.append(bbox)
-                gt_labels.append(self.cat2label[ann['category_id']])  #根据对应的ann中的category_id，输入到cat2label中求label,cat2label把类别数+1作为label，因为label=0是背景
-            if with_mask:
-                gt_masks.append(self.coco.annToMask(ann))
-                mask_polys = [
-                    p for p in ann['segmentation'] if len(p) >= 6
-                ]  # valid polygons have >= 3 points (6 coordinates)
-                poly_lens = [len(p) for p in mask_polys]
-                gt_mask_polys.append(mask_polys)
-                gt_poly_lens.extend(poly_lens)
+                gt_labels.append(self.cat2label[ann['category_id']])#根据对应的ann中的category_id，输入到cat2label中求label,cat2label把类别数+1作为label，因为label=0是背景
+                gt_masks_ann.append(ann['segmentation'])
+
         if gt_bboxes:
             gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
             gt_labels = np.array(gt_labels, dtype=np.int64)
@@ -125,12 +115,13 @@ class CocoDataset(CustomDataset):
         else:
             gt_bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
 
-        ann = dict(
-            bboxes=gt_bboxes, labels=gt_labels, bboxes_ignore=gt_bboxes_ignore)
+        seg_map = img_info['filename'].replace('jpg', 'png')
 
-        if with_mask:
-            ann['masks'] = gt_masks
-            # poly format is not used in the current implementation
-            ann['mask_polys'] = gt_mask_polys
-            ann['poly_lens'] = gt_poly_lens
+        ann = dict(
+            bboxes=gt_bboxes,
+            labels=gt_labels,
+            bboxes_ignore=gt_bboxes_ignore,
+            masks=gt_masks_ann,
+            seg_map=seg_map)
+
         return ann

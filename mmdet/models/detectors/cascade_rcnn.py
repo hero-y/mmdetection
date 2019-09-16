@@ -174,15 +174,17 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
             proposal_list = self.rpn_head.get_bboxes(*proposal_inputs)
         else:
             proposal_list = proposals
-
+        
+        #3次的迭代在assign和proposals之间
         for i in range(self.num_stages):
+            #train_cfg.rcnn，lw,roi_extractor,bbox_head都有三个
             self.current_stage = i
             rcnn_train_cfg = self.train_cfg.rcnn[i]
             lw = self.train_cfg.stage_loss_weights[i]
 
             # assign gts and sample proposals
             sampling_results = []
-            if self.with_bbox or self.with_mask:
+            if self.with_bbox or self.with_mask: #进入
                 bbox_assigner = build_assigner(rcnn_train_cfg.assigner)
                 bbox_sampler = build_sampler(
                     rcnn_train_cfg.sampler, context=self)
@@ -260,11 +262,11 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
 
             # refine bboxes
             if i < self.num_stages - 1:
-                pos_is_gts = [res.pos_is_gt for res in sampling_results]
-                roi_labels = bbox_targets[0]  # bbox_targets is a tuple
+                pos_is_gts = [res.pos_is_gt for res in sampling_results] #按图像的list
+                roi_labels = bbox_targets[0]  # bbox_targets是tuple 序号零对应的是label
                 with torch.no_grad():
                     proposal_list = bbox_head.refine_bboxes(
-                        rois, roi_labels, bbox_pred, pos_is_gts, img_meta)
+                        rois, roi_labels, bbox_pred, pos_is_gts, img_meta) #proposal_list依旧是按照图像来的
 
         return losses
 
@@ -282,7 +284,9 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
         ms_segm_result = {}
         ms_scores = []
         rcnn_test_cfg = self.test_cfg.rcnn
-
+        #在test的时候bbox2roi不需要被循环，是因为test的时候不用assigin和sample,所以也就不用生成
+        #按照图像分的proposals，就直接按照rois来就行，调用的也是regress_by_class而不是refine_bboxes
+        #refine_bboxes(这个是在用regress_by_class生成rois的基础上用把图像和图像分开生成proposals的)
         rois = bbox2roi(proposal_list)
         for i in range(self.num_stages):
             bbox_roi_extractor = self.bbox_roi_extractor[i]
@@ -293,7 +297,7 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
             if self.with_shared_head:
                 bbox_feats = self.shared_head(bbox_feats)
 
-            cls_score, bbox_pred = bbox_head(bbox_feats)
+            cls_score, bbox_pred = bbox_head(bbox_feats) #(n,81) (n,4)
             ms_scores.append(cls_score)
 
             if self.test_cfg.keep_all_stages:
@@ -334,9 +338,9 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
             if i < self.num_stages - 1:
                 bbox_label = cls_score.argmax(dim=1)
                 rois = bbox_head.regress_by_class(rois, bbox_label, bbox_pred,
-                                                  img_meta[0])
+                                                  img_meta[0]) #(n,5)
 
-        cls_score = sum(ms_scores) / self.num_stages
+        cls_score = sum(ms_scores) / self.num_stages #在test的时候rois的个数不变，分数是各阶段的sum/阶段数,分数就在最后get_det_bboxes的时候才用到
         det_bboxes, det_labels = self.bbox_head[-1].get_det_bboxes(
             rois,
             cls_score,
@@ -344,9 +348,10 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
             img_shape,
             scale_factor,
             rescale=rescale,
-            cfg=rcnn_test_cfg)
+            cfg=rcnn_test_cfg)  #det_bboxes是(k,5) det_labels是(k,)
         bbox_result = bbox2result(det_bboxes, det_labels,
-                                  self.bbox_head[-1].num_classes)
+                                  self.bbox_head[-1].num_classes) #把bbox和label .cpu().numpy()
+        #bbox_result是list，按照类别分，这就是输入det_labels的目的，det_labels是(0,79),此时就不管背景了
         ms_bbox_result['ensemble'] = bbox_result
 
         if self.with_mask:
@@ -402,7 +407,7 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
     def aug_test(self, img, img_meta, proposals=None, rescale=False):
         raise NotImplementedError
 
-    def show_result(self, data, result, img_norm_cfg, **kwargs):
+    def show_result(self, data, result, **kwargs):
         if self.with_mask:
             ms_bbox_result, ms_segm_result = result
             if isinstance(ms_bbox_result, dict):
@@ -411,5 +416,4 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
         else:
             if isinstance(result, dict):
                 result = result['ensemble']
-        super(CascadeRCNN, self).show_result(data, result, img_norm_cfg,
-                                             **kwargs)
+        super(CascadeRCNN, self).show_result(data, result, **kwargs)

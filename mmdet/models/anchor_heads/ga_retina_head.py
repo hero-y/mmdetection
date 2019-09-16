@@ -25,6 +25,8 @@ class GARetinaHead(GuidedAnchorHead):
 
     def _init_layers(self):
         self.relu = nn.ReLU(inplace=True)
+        #对RetinaNet中fpn特征图进一步提取特征的cls_convs和reg_convs都有4个stack
+        #也就是说cls_convs和reg_convs不一样，cls_convs中的4个conv也都不一样
         self.cls_convs = nn.ModuleList()
         self.reg_convs = nn.ModuleList()
         for i in range(self.stacked_convs):
@@ -51,6 +53,8 @@ class GARetinaHead(GuidedAnchorHead):
         self.conv_loc = nn.Conv2d(self.feat_channels, 1, 1)
         self.conv_shape = nn.Conv2d(self.feat_channels, self.num_anchors * 2,
                                     1)
+        #在ga_retina_head中使用了两个FeatureAdaption,因为进入retina_cls和retina_reg的输入量
+        #不是fpn的特征图而是经过4个stack后的图，而retina_cls和retina_reg的输入又不同，所以使用了两个FeatureAdaption
         self.feature_adaption_cls = FeatureAdaption(
             self.feat_channels,
             self.feat_channels,
@@ -92,6 +96,7 @@ class GARetinaHead(GuidedAnchorHead):
         for reg_conv in self.reg_convs:
             reg_feat = reg_conv(reg_feat)
 
+        #在对fpn输出的特征图经过4个stack的cls_convs和4个stack的reg_convs后再求loc_pred和shape_pred
         loc_pred = self.conv_loc(cls_feat)
         shape_pred = self.conv_shape(reg_feat)
 

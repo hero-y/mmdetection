@@ -4,7 +4,9 @@ from torch.autograd.function import once_differentiable
 
 from . import sigmoid_focal_loss_cuda
 
-
+"""
+在focla_loss调用_sigmoid_focal_loss的时候会进入下面的类中，调用cuda写的forward和backward
+"""
 class SigmoidFocalLossFunction(Function):
 
     @staticmethod

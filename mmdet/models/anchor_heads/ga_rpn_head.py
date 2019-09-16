@@ -67,6 +67,11 @@ class GARPNHead(GuidedAnchorHead):
                           cfg,
                           rescale=False):
         mlvl_proposals = []
+        #一次迭代的cls_scores:(1,h,w);bbox_preds:(4,h,w);mlvl_anchors：(k,4) 其中k=h*w ;mlvl_masks:(k,)
+        #对于rpn中的预测值cls_scores,bbox_preds,shape_preds,loc_preds都是以level为list,每个的形状为(n,c,h,w)
+        #而rpn中的生成的anchors都是以图像为list,每个level的形状为(k,4)
+        #要按照先图像再level的形式对应起来，即如：bbox_preds[i][img_id],anchors[img_id][i]
+        #再把shape对应起来，所以bbox_preds.permute(1,2,0).contiguous.view(-1,4)
         for idx in range(len(cls_scores)):
             rpn_cls_score = cls_scores[idx]
             rpn_bbox_pred = bbox_preds[idx]
@@ -101,6 +106,11 @@ class GARPNHead(GuidedAnchorHead):
             # get proposals w.r.t. anchors and rpn_bbox_pred
             proposals = delta2bbox(anchors, rpn_bbox_pred, self.target_means,
                                    self.target_stds, img_shape)
+            #为什么要用9个anchor来确定这个位置的anchor应该对应哪个gt
+            #因为该位置的anchor的大小是不确定的，所以就不能用它来选择对应的gt,
+            #为什么不用guide_anchor来assign?
+            #每个batch进来的时候都要重新生成anchor,因为图像的大小不一样
+        
             # filter out too small bboxes
             if cfg.min_bbox_size > 0:
                 w = proposals[:, 2] - proposals[:, 0] + 1
@@ -116,10 +126,14 @@ class GARPNHead(GuidedAnchorHead):
             mlvl_proposals.append(proposals)
         proposals = torch.cat(mlvl_proposals, 0)
         if cfg.nms_across_levels:
+            #对cat后的proposals(5个阶段在一起)进行nms,再切片取值
+            #不用在multi levels中使用nms的原因是每个level是负责预测不同尺寸的物体的，如果对多个level之间使用nms
+            #那么可能就会滤除掉一些在原本的level能够较好对应gt的proposals
             # NMS across multi levels
             proposals, _ = nms(proposals, cfg.nms_thr)
             proposals = proposals[:cfg.max_num, :]
         else:
+            #进入 把各个阶段的proposals cat到一起后不用再nms，而是取scores的前topk的序号带入proposals中
             scores = proposals[:, 4]
             num = min(cfg.max_num, proposals.shape[0])
             _, topk_inds = scores.topk(num)

@@ -23,7 +23,12 @@ def coco_eval(result_files, result_types, coco, max_dets=(100, 300, 1000)):
         return
 
     for res_type in result_types:
-        result_file = result_files[res_type]
+        if isinstance(result_files, str):
+            result_file = result_files
+        elif isinstance(result_files, dict):
+            result_file = result_files[res_type]
+        else:
+            assert TypeError('result_files must be a str or dict')
         assert result_file.endswith('.json')
 
         coco_dets = coco.loadRes(result_file)
@@ -100,22 +105,24 @@ def proposal2json(dataset, results):
             json_results.append(data)
     return json_results
 
-
+#有很多图像，要遍历
+#每个图像中有很多类，要遍历
+#每个类中有很多bbox，要遍历
 def det2json(dataset, results):
     json_results = []
-    for idx in range(len(dataset)):
-        img_id = dataset.img_ids[idx]
-        result = results[idx]
-        for label in range(len(result)):
-            bboxes = result[label]
-            for i in range(bboxes.shape[0]):
+    for idx in range(len(dataset)): #len(dataset)是len(self.img_infos)即所有图像的长度，遍历每张图片
+        img_id = dataset.img_ids[idx] #第 幅图片的id
+        result = results[idx] #第 幅图片的结果信息
+        for label in range(len(result)): #len(result)是里面的类别数量，遍历每个类
+            bboxes = result[label] #label这个类的所有的bbox的信息
+            for i in range(bboxes.shape[0]): #bboxes.shape[0]，bbox的数量，遍历每个bbox
                 data = dict()
                 data['image_id'] = img_id
                 data['bbox'] = xyxy2xywh(bboxes[i])
                 data['score'] = float(bboxes[i][4])
                 data['category_id'] = dataset.cat_ids[label]
-                json_results.append(data)
-    return json_results
+                json_results.append(data) 
+    return json_results #json_results是个list,其中的对象是bbox的信息，每个都是dict [{},{},{}...]
 
 
 def segm2json(dataset, results):
