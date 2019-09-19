@@ -89,7 +89,7 @@ train_pipeline = [
     dict(type='LoadAnnotations', with_bbox=True),
     dict(type='Resize', img_scale=(1333, 800), keep_ratio=True),
     dict(type='RandomFlip', flip_ratio=0.5),
-    dict(type='Normalize', **img_norm_cfg),
+    dict(type='Normalize', **img_norm_cfg),# 使用**img_norm_cfg,是因为img_norm_cfg是dict,且因为定义Normalize初始化的时候参数是mean,std,to_rgb,而调用的时候就只有一个参数img_norm_cfg,所以要**img_norm_cfg
     dict(type='Pad', size_divisor=32),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),

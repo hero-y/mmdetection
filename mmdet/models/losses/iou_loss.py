@@ -6,6 +6,7 @@ from ..registry import LOSSES
 from .utils import weighted_loss
 
 
+#iou_loss其实就是用bbox_overlaps求出pre和target的iou，再用-log(iou),
 @weighted_loss
 def iou_loss(pred, target, eps=1e-6):
     """IoU loss.
@@ -68,7 +69,7 @@ def bounded_iou_loss(pred, target, beta=0.2, eps=1e-3):
                        loss_comb - 0.5 * beta)
     return loss
 
-
+#loss需要继承nn.module，因为loss也有forward且也要backward
 @LOSSES.register_module
 class IoULoss(nn.Module):
 

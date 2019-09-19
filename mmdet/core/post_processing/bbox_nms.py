@@ -36,8 +36,12 @@ def multiclass_nms(multi_bboxes,
     num_classes = multi_scores.shape[1]
     bboxes, labels = [], []
     nms_cfg_ = nms_cfg.copy()
-    nms_type = nms_cfg_.pop('type', 'nms')
+    nms_type = nms_cfg_.pop('type', 'nms')#pop移除列表中的某个元素，并返回该元素的值
     nms_op = getattr(nms_wrapper, nms_type)
+    #函数名字叫multiclass_nms，所以是按照类别循环的,所以对于分数而言，就要和每一类对应上去,
+    #首先确定每个对象的该类的分数是否大于阈值，做一次过滤,再把对应该类的分数和score_factors相乘,
+    #score_factors在fcos中是centerness,把bboxes和scores cat到一起，输入nms中，输出的cls_dets也是5位的
+    #可能nms后，bbox的数量会超过设定的数量,所以再根据分数排序
     for i in range(1, num_classes): #在coco中因为每个bbox的score都是81个类这么多,要按照类来操作
         cls_inds = multi_scores[:, i] > score_thr  #获取该类的满足阈值的所有bbox的序号,0,1分布
         if not cls_inds.any():

@@ -36,6 +36,7 @@ model = dict(
         loss_centerness=dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0)))
 # training and testing settings
+# 在fcos中实际没用到train_cfg
 train_cfg = dict(
     assigner=dict(
         type='MaxIoUAssigner',
@@ -47,11 +48,11 @@ train_cfg = dict(
     pos_weight=-1,
     debug=False)
 test_cfg = dict(
-    nms_pre=1000,
+    nms_pre=1000,#针对每个level,nms之前的bbox数取score前2000
     min_bbox_size=0,
     score_thr=0.05,
-    nms=dict(type='nms', iou_thr=0.5),
-    max_per_img=100)
+    nms=dict(type='nms', iou_thr=0.5),#再把所有level cat到一起,使用nms
+    max_per_img=100)#如果nms后每个图片的bbox数量查过max_per_img，则根据score排序，取出前max_per_img的bbox
 # dataset settings
 dataset_type = 'CocoDataset'
 data_root = 'data/coco/'

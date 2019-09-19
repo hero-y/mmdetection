@@ -53,6 +53,7 @@ class SingleStageDetector(BaseDetector):
         outs = self.bbox_head(x)
         return outs
 
+    #在coco中gt_labels的范围是(1,80)其中没有0,有80
     def forward_train(self,
                       img,
                       img_metas,
