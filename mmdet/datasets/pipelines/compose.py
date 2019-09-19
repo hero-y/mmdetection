@@ -12,7 +12,7 @@ class Compose(object):
         self.transforms = []
         for transform in transforms:
             if isinstance(transform, dict):
-                transform = build_from_cfg(transform, PIPELINES)
+                transform = build_from_cfg(transform, PIPELINES)#build_from_cfg输入的第一个参数是cfg,第二个是Registry，相当于是把该transform对应的类实例初始化了
                 self.transforms.append(transform)
             elif callable(transform):
                 self.transforms.append(transform)

@@ -136,7 +136,7 @@ def anchor_target_single(flat_anchors,
         bbox_assigner = build_assigner(cfg.assigner)
         assign_result = bbox_assigner.assign(anchors, gt_bboxes,
                                              gt_bboxes_ignore, gt_labels)
-        bbox_sampler = PseudoSampler()
+        bbox_sampler = PseudoSampler() #pseudo:假的，即focal_loss的时候不需要sample(也就是说不用正负样本3:1)
         sampling_result = bbox_sampler.sample(assign_result, anchors,
                                               gt_bboxes)
 

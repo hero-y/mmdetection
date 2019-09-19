@@ -312,4 +312,61 @@ def basic_grammer_exp():
     target_lvls = target_lvls.clamp(min=0, max=4).long()
     print(target_lvls[0].item())
 
+    """
+    如cfg中的model是一个dict,dict比较适合在初始化时传入参数，实际是调用了build_from_cfg，
+    在这里面当把type pop出来之后，输入的时候其实是**args
+    """
+    """
+    扩展维度的方法:expand_as,expand,repeat,
+    expand_as:输入的是某一个变量，最后输出的值的shape和输入的变量的shape一致
+    expand:最后的输出的shape就是epxand中传入的两个值
+    repeat:输入的第一个参数代表沿着行重复的次数，第二个参数代表沿着列重复的次数,此时是把输入就当做一个元素进行重复
+    """
+    points = torch.randn(12,2)
+    expanded_regress_ranges = points.new_tensor((-1,64))[None].expand_as(points)
+
+    num_points = 10
+    areas = torch.tensor([1,2,3,4,5])
+    areas1 = areas[None].repeat(num_points, 1)#repeat的第一个参数代表沿着行重复的次数，纵坐标代表沿着列重复的次数,此时是把输入就当做一个元素进行重复的
+    areas2 = areas[None].expand(num_points,areas.size(0))#expand,最后的输出的shape就是epxand中传入的两个值
+
+    """
+    gt_labels是(2,4)可以一次性输入多个索引值，如min_area_inds是三个索引值
+    """
+    gt_labels = torch.arange(8).reshape(2, 4)
+    min_area_inds = torch.tensor([1, 1, 0])
+    labels = gt_labels[min_area_inds]
+
+    """
+    bbox_targets是在fcos中的，(3,2,4)意思是3个点,每个点中有2个gt预选,每个gt的坐标是4个值
+    为了求出每个点中合适的gt的坐标值，有如下三种写法
+    bbox_targets1相当于是对每个点中去3次情况的gt(bbox_targets1是错误的写法)
+    bbox_targets2和bbox_targets3效果一样,bbox_targets3更容易理解(二者都是正确的写法)
+    """
+    bbox_targets = torch.arange(24).reshape(3, 2, 4)
+    bbox_targets1 = bbox_targets[:, min_area_inds]  # (3,3,4)
+    bbox_targets2 = bbox_targets[range(bbox_targets.size(0)), min_area_inds]
+    bbox_targets3 = []
+    for i in range(bbox_targets.size(0)):
+        bbox_targets3.append(bbox_targets[i, min_area_inds[i]])
+    bbox_targets3 = torch.cat(bbox_targets3, dim=0).reshape(bbox_targets.size(0), 4)
+
+    """
+    按照指定的维度根据规定的大小num_points,对tensor进行分割,分割出一个个新的tensor,这些tensor在一个tuple中
+    """
+    labels = torch.randn(12)
+    num_points = [3, 5, 4]
+    labels_list = labels.split(num_points, 0)
+
+    """
+    nonzero返回一个包含输入中所含元素非零索引的张量,输出张量中每行包含输入中非零元素的索引,所以是(n,1),故一般nonzero后要加上.reshape(-1)
+    """
+    pos_inds = torch.tensor([0, 1, 1, 0, 1]).nonzero().reshape(-1)
+
+    """
+    可以再tensor中使用if i in tensor: 去判断某个元素是否在该tensor中
+    """
+    labels = torch.tensor([0, 1])
+    if 0 in labels:
+        print(0)
 if __name__ == '__main__':

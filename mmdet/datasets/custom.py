@@ -96,6 +96,8 @@ class CustomDataset(Dataset):
         return self.img_infos[idx]['ann']
 
     def pre_pipeline(self, results):
+        #results是dict(img_info=img_info, ann_info=ann_info)
+        #下面的语句相当于是多加了键值，改变results
         results['img_prefix'] = self.img_prefix
         results['seg_prefix'] = self.seg_prefix
         results['proposal_file'] = self.proposal_file
@@ -130,7 +132,7 @@ class CustomDataset(Dataset):
         pool = np.where(self.flag == self.flag[idx])[0]
         return np.random.choice(pool)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx): # __getitem__可以让对象具有迭代性，也可以让对象像字典一样取值
         if self.test_mode:
             return self.prepare_test_img(idx)
         while True:
