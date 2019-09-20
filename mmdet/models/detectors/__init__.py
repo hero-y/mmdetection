@@ -14,10 +14,11 @@ from .rpn import RPN
 from .single_stage import SingleStageDetector
 from .two_stage import TwoStageDetector
 from .dis_cascade_rcnn import DisCascadeRCNN
+from .cascade_fcos import CascadeFCOS
 
 __all__ = [
     'BaseDetector', 'SingleStageDetector', 'TwoStageDetector', 'RPN',
     'FastRCNN', 'FasterRCNN', 'MaskRCNN', 'CascadeRCNN', 'HybridTaskCascade',
     'DoubleHeadRCNN', 'RetinaNet', 'FCOS', 'GridRCNN', 'MaskScoringRCNN', 'DisCascadeRCNN',
-    'RepPointsDetector'
+    'RepPointsDetector', 'CascadeFCOS'
 ]
