@@ -141,6 +141,9 @@ def show_result(img,
         labels,
         class_names=class_names,
         score_thr=score_thr,
+        bbox_color='blue',
+        text_color='white',
+        thickness=2,
         show=show,
         wait_time=wait_time,
         out_file=out_file)
@@ -167,5 +170,6 @@ def show_result_pyplot(img,
     """
     img = show_result(
         img, result, class_names, score_thr=score_thr, show=False)
-    plt.figure(figsize=fig_size)
+    # plt.figure(figsize=fig_size)
     plt.imshow(mmcv.bgr2rgb(img))
+    plt.show()
