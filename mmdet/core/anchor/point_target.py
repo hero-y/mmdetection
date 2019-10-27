@@ -100,12 +100,12 @@ def point_target_single(flat_proposals,
     if not inside_flags.any():
         return (None, ) * 7
     # assign gt and sample proposals
-    proposals = flat_proposals[inside_flags, :]
+    proposals = flat_proposals[inside_flags, :] #(n,3)或者(n,4)
 
     if sampling:
         assign_result, sampling_result = assign_and_sample(
             proposals, gt_bboxes, gt_bboxes_ignore, None, cfg)
-    else:
+    else:#进入
         bbox_assigner = build_assigner(cfg.assigner)
         assign_result = bbox_assigner.assign(proposals, gt_bboxes,
                                              gt_bboxes_ignore, gt_labels)

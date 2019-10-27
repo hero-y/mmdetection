@@ -74,7 +74,7 @@ class RepPointsHead(nn.Module):
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.use_sigmoid_cls = loss_cls.get('use_sigmoid', False)
-        self.sampling = loss_cls['type'] not in ['FocalLoss']
+        self.sampling = loss_cls['type'] not in ['FocalLoss'] #False
         self.loss_cls = build_loss(loss_cls)
         self.loss_bbox_init = build_loss(loss_bbox_init)
         self.loss_bbox_refine = build_loss(loss_bbox_refine)
@@ -91,18 +91,21 @@ class RepPointsHead(nn.Module):
             self.cls_out_channels = self.num_classes
         self.point_generators = [PointGenerator() for _ in self.point_strides]
         # we use deformable conv to extract points features
-        self.dcn_kernel = int(np.sqrt(num_points))
-        self.dcn_pad = int((self.dcn_kernel - 1) / 2)
+        self.dcn_kernel = int(np.sqrt(num_points)) #3
+        self.dcn_pad = int((self.dcn_kernel - 1) / 2) #1
         assert self.dcn_kernel * self.dcn_kernel == num_points, \
             "The points number should be a square number."
         assert self.dcn_kernel % 2 == 1, \
             "The points number should be an odd square number."
         dcn_base = np.arange(-self.dcn_pad,
-                             self.dcn_pad + 1).astype(np.float64)
-        dcn_base_y = np.repeat(dcn_base, self.dcn_kernel)
-        dcn_base_x = np.tile(dcn_base, self.dcn_kernel)
+                             self.dcn_pad + 1).astype(np.float64)#
+        #numpy中repeat是一个一个元素复制，tile是一组一组复制
+        dcn_base_y = np.repeat(dcn_base, self.dcn_kernel)#(-1,-1,-1,0,0,0,1,1,1)
+        dcn_base_x = np.tile(dcn_base, self.dcn_kernel)#(-1,0,1,-1,0,1,-1,0,1)
         dcn_base_offset = np.stack([dcn_base_y, dcn_base_x], axis=1).reshape(
-            (-1))
+            (-1))#dcn_base_offset是用stack把x,y拼接到一起后，再view，顺序是(y,x)
+        #用np处理数据的中间量不用变成类的属性self,在用tensor之后变成self属性
+        #(1,-1,1,1)代表一个常规的维度，其实dcn_base_offset也就是基本的偏移量，一共9个点
         self.dcn_base_offset = torch.tensor(dcn_base_offset).view(1, -1, 1, 1)
         self._init_layers()
 
@@ -131,6 +134,8 @@ class RepPointsHead(nn.Module):
                     conv_cfg=self.conv_cfg,
                     norm_cfg=self.norm_cfg))
         pts_out_dim = 4 if self.use_grid_points else 2 * self.num_points
+        #给卷积取名字的时候:一般中间过程的卷积最后面是conv,会加上前缀作为区分
+        #后缀是out的时候代表该卷积的输出会有其余的使用地
         self.reppoints_cls_conv = DeformConv(self.feat_channels,
                                              self.point_feat_channels,
                                              self.dcn_kernel, 1, self.dcn_pad)
@@ -161,6 +166,7 @@ class RepPointsHead(nn.Module):
         normal_init(self.reppoints_pts_refine_conv, std=0.01)
         normal_init(self.reppoints_pts_refine_out, std=0.01)
 
+    #把9个点转换为bbox的三种方法
     def points2bbox(self, pts, y_first=True):
         """
         Converting the points set into bounding box.
@@ -171,18 +177,18 @@ class RepPointsHead(nn.Module):
             represented as [x1, y1, x2, y2 ... xn, yn].
         :return: each points set is converting to a bbox [x1, y1, x2, y2].
         """
-        pts_reshape = pts.view(pts.shape[0], -1, 2, *pts.shape[2:])
+        pts_reshape = pts.view(pts.shape[0], -1, 2, *pts.shape[2:]) #(2,9,2,h,w)
         pts_y = pts_reshape[:, :, 0, ...] if y_first else pts_reshape[:, :, 1,
-                                                                      ...]
+                                                                      ...] #(2,9,h,w)
         pts_x = pts_reshape[:, :, 1, ...] if y_first else pts_reshape[:, :, 0,
                                                                       ...]
         if self.transform_method == 'minmax':
-            bbox_left = pts_x.min(dim=1, keepdim=True)[0]
+            bbox_left = pts_x.min(dim=1, keepdim=True)[0] #(2,1,h,w)
             bbox_right = pts_x.max(dim=1, keepdim=True)[0]
             bbox_up = pts_y.min(dim=1, keepdim=True)[0]
             bbox_bottom = pts_y.max(dim=1, keepdim=True)[0]
             bbox = torch.cat([bbox_left, bbox_up, bbox_right, bbox_bottom],
-                             dim=1)
+                             dim=1) #(2,4,h,w),在torch中使用的是dim,在np中是axis,这里使用的是cat，而不是stack,因为不需要增加维度
         elif self.transform_method == 'partial_minmax':
             pts_y = pts_y[:, :4, ...]
             pts_x = pts_x[:, :4, ...]
@@ -193,7 +199,7 @@ class RepPointsHead(nn.Module):
             bbox = torch.cat([bbox_left, bbox_up, bbox_right, bbox_bottom],
                              dim=1)
         elif self.transform_method == 'moment':
-            pts_y_mean = pts_y.mean(dim=1, keepdim=True)
+            pts_y_mean = pts_y.mean(dim=1, keepdim=True) #(2,1,h,w)
             pts_x_mean = pts_x.mean(dim=1, keepdim=True)
             pts_y_std = torch.std(pts_y - pts_y_mean, dim=1, keepdim=True)
             pts_x_std = torch.std(pts_x - pts_x_mean, dim=1, keepdim=True)
@@ -246,11 +252,17 @@ class RepPointsHead(nn.Module):
         ], 1)
         return grid_yx, regressed_bbox
 
+    #在forward_single中，输出的值就本不需要变成self属性，因为最后只用到return的结果
     def forward_single(self, x):
+        #要使用pts_out_init_grad_mul - dcn_base_offset,是因为pts_out_init_grad_mul相当于是
+        #偏移量，而dcn_base_offset相当于是这9个点的初始位置(正方形的4个角点+4个边的中心点+1个正方形的中心点)
+        #二者要做计算，就要同一个type,都要在cuda上。所以直接用了type_as()。注意在打印type的时候用.type()
         dcn_base_offset = self.dcn_base_offset.type_as(x)
         # If we use center_init, the initial reppoints is from center points.
         # If we use bounding bbox representation, the initial reppoints is
         #   from regular grid placed on a pre-defined bbox.
+        #第一个if指的是如果use_grid_points,那么最开始的bbox的scale为4(即一边长为4)
+        #求出对应的bbox的左上角和右下角的坐标，以及9个点的初始化坐标(要乘scale)
         if self.use_grid_points or not self.center_init:
             scale = self.point_base_scale / 2
             points_init = dcn_base_offset / dcn_base_offset.max() * scale
@@ -258,7 +270,7 @@ class RepPointsHead(nn.Module):
                                       scale]).view(1, 4, 1, 1)
         else:
             points_init = 0
-        cls_feat = x
+        cls_feat = x #requires_grad = True
         pts_feat = x
         for cls_conv in self.cls_convs:
             cls_feat = cls_conv(cls_feat)
@@ -266,26 +278,34 @@ class RepPointsHead(nn.Module):
             pts_feat = reg_conv(pts_feat)
         # initialize reppoints
         pts_out_init = self.reppoints_pts_init_out(
-            self.relu(self.reppoints_pts_init_conv(pts_feat)))
+            self.relu(self.reppoints_pts_init_conv(pts_feat))) #offset1 (2,18,h,w)
         if self.use_grid_points:
             pts_out_init, bbox_out_init = self.gen_grid_from_reg(
                 pts_out_init, bbox_init.detach())
         else:
-            pts_out_init = pts_out_init + points_init
+            pts_out_init = pts_out_init + points_init #(2,18,h,w) requires_grad = True
         # refine and classify reppoints
+        #下面这个方法用的很巧妙，其实pts_out_init_grad_mul和pts_out_init是一样的，只不过可能
+        #因为点波动较大所以相当于是把lr乘了0.1，前面用detach(),后面不用就是因为，在BP的时候会挑requires_grad = True
+        #的值不断前传，这样也就相当于实现了在pts_out_init_grad_mul前传的时候×0.1
         pts_out_init_grad_mul = (1 - self.gradient_mul) * pts_out_init.detach(
         ) + self.gradient_mul * pts_out_init
-        dcn_offset = pts_out_init_grad_mul - dcn_base_offset
+        dcn_offset = pts_out_init_grad_mul - dcn_base_offset 
+        #两个dconv共用一个offset1，该offset1是通过正常网络输出的pts_out_init,
         cls_out = self.reppoints_cls_out(
             self.relu(self.reppoints_cls_conv(cls_feat, dcn_offset)))
         pts_out_refine = self.reppoints_pts_refine_out(
-            self.relu(self.reppoints_pts_refine_conv(pts_feat, dcn_offset)))
+            self.relu(self.reppoints_pts_refine_conv(pts_feat, dcn_offset)))#offset2
         if self.use_grid_points:
             pts_out_refine, bbox_out_refine = self.gen_grid_from_reg(
                 pts_out_refine, bbox_out_init.detach())
         else:
+            #网络输出的pts_out_refine相当于是在第一次偏移的基础上再做偏移，所以需要加上第一次的输出
+            #而这次相加时，就只是把第一次的输出当做是一个标量，所以加上.detach()就不希望因为这个相加的
+            #操作让pts_out_init进行BP，而相加中的pts_out_refine在BP的时候会更新到pts_out_init，那个时候
+            #pts_out_init才要BP
             pts_out_refine = pts_out_refine + pts_out_init.detach()
-        return cls_out, pts_out_init, pts_out_refine
+        return cls_out, pts_out_init, pts_out_refine #(2,81,h,w) (2,18,h,w) (2,18,h,w)
 
     def forward(self, feats):
         return multi_apply(self.forward_single, feats)
@@ -309,7 +329,8 @@ class RepPointsHead(nn.Module):
         for i in range(num_levels):
             points = self.point_generators[i].grid_points(
                 featmap_sizes[i], self.point_strides[i])
-            multi_level_points.append(points)
+            multi_level_points.append(points) 
+        #一般对于[img][lvl]型的命名为前缀_list
         points_list = [[point.clone() for point in multi_level_points]
                        for _ in range(num_imgs)]
 
@@ -328,7 +349,8 @@ class RepPointsHead(nn.Module):
                 multi_level_flags.append(flags)
             valid_flag_list.append(multi_level_flags)
 
-        return points_list, valid_flag_list
+        #[img][lvl](k,3),之所以是k而不是h,w是因为生成point的方法是repeat，是在一个维度上的repeat，也没有做view到(h,w)
+        return points_list, valid_flag_list 
 
     def centers_to_bboxes(self, point_list):
         """Get bboxes according to center points. Only used in MaxIOUAssigner.
@@ -347,24 +369,24 @@ class RepPointsHead(nn.Module):
         return bbox_list
 
     def offset_to_pts(self, center_list, pred_list):
-        """Change from point offset to point coordinate.
+        """Change from point offset to point coordinate. coordinate:坐标系
         """
-        pts_list = []
+        pts_list = [] #先按level再按img
         for i_lvl in range(len(self.point_strides)):
             pts_lvl = []
             for i_img in range(len(center_list)):
                 pts_center = center_list[i_img][i_lvl][:, :2].repeat(
-                    1, self.num_points)
-                pts_shift = pred_list[i_lvl][i_img]
+                    1, self.num_points) #(n,18) n = w*h
+                pts_shift = pred_list[i_lvl][i_img] #(18,h,w)
                 yx_pts_shift = pts_shift.permute(1, 2, 0).view(
-                    -1, 2 * self.num_points)
-                y_pts_shift = yx_pts_shift[..., 0::2]
-                x_pts_shift = yx_pts_shift[..., 1::2]
-                xy_pts_shift = torch.stack([x_pts_shift, y_pts_shift], -1)
-                xy_pts_shift = xy_pts_shift.view(*yx_pts_shift.shape[:-1], -1)
+                    -1, 2 * self.num_points)#(n,18)
+                y_pts_shift = yx_pts_shift[..., 0::2] #(n,9)
+                x_pts_shift = yx_pts_shift[..., 1::2] #(n,9)
+                xy_pts_shift = torch.stack([x_pts_shift, y_pts_shift], -1) #(n,9,2)
+                xy_pts_shift = xy_pts_shift.view(*yx_pts_shift.shape[:-1], -1) #(n,18)
                 pts = xy_pts_shift * self.point_strides[i_lvl] + pts_center
                 pts_lvl.append(pts)
-            pts_lvl = torch.stack(pts_lvl, 0)
+            pts_lvl = torch.stack(pts_lvl, 0) #(2,n,18)
             pts_list.append(pts_lvl)
         return pts_list
 
@@ -420,9 +442,9 @@ class RepPointsHead(nn.Module):
 
         # target for initial stage
         center_list, valid_flag_list = self.get_points(featmap_sizes,
-                                                       img_metas)
+                                                       img_metas) #[img][lvl] (n,3)
         pts_coordinate_preds_init = self.offset_to_pts(center_list,
-                                                       pts_preds_init)
+                                                       pts_preds_init) #[lvl] (2,n,18)
         if cfg.init.assigner['type'] == 'PointAssigner':
             # Assign target for center list
             candidate_list = center_list
@@ -441,15 +463,16 @@ class RepPointsHead(nn.Module):
             gt_labels_list=gt_labels,
             label_channels=label_channels,
             sampling=self.sampling)
+        #bbox_gt_list_init是bbox_gt_list；candidate_list_init是proposals_list
         (*_, bbox_gt_list_init, candidate_list_init, bbox_weights_list_init,
-         num_total_pos_init, num_total_neg_init) = cls_reg_targets_init
+         num_total_pos_init, num_total_neg_init) = cls_reg_targets_init 
         num_total_samples_init = (
             num_total_pos_init +
             num_total_neg_init if self.sampling else num_total_pos_init)
 
         # target for refinement stage
         center_list, valid_flag_list = self.get_points(featmap_sizes,
-                                                       img_metas)
+                                                       img_metas) #center_list [img][lvl]
         pts_coordinate_preds_refine = self.offset_to_pts(
             center_list, pts_preds_refine)
         bbox_list = []
@@ -457,13 +480,13 @@ class RepPointsHead(nn.Module):
             bbox = []
             for i_lvl in range(len(pts_preds_refine)):
                 bbox_preds_init = self.points2bbox(
-                    pts_preds_init[i_lvl].detach())
-                bbox_shift = bbox_preds_init * self.point_strides[i_lvl]
+                    pts_preds_init[i_lvl].detach())  #detach()？？ #(2,18,h,w)
+                bbox_shift = bbox_preds_init * self.point_strides[i_lvl] #(2,4,h,w)
                 bbox_center = torch.cat(
-                    [center[i_lvl][:, :2], center[i_lvl][:, :2]], dim=1)
+                    [center[i_lvl][:, :2], center[i_lvl][:, :2]], dim=1) #(n,4)
                 bbox.append(bbox_center +
                             bbox_shift[i_img].permute(1, 2, 0).reshape(-1, 4))
-            bbox_list.append(bbox)
+            bbox_list.append(bbox) #[img][lvl]
         cls_reg_targets_refine = point_target(
             bbox_list,
             valid_flag_list,
