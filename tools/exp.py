@@ -7,34 +7,36 @@ import matplotlib.pyplot as plt
 import time
 from random import  choice
 from torch.autograd import Variable
+import torch.nn.functional as F
+import torch.nn as nn
 
 def exp_dim():
+
+    """
+    torch的操作
+    """
     m = torch.randn(2, 1, 4)
     n = torch.randn(1, 2)
     o = torch.randn(2, 4)
     a = torch.randn(1, 2)
     b = torch.randn(1, 2)
-    c = torch.cat((a, b), dim=-1)
-    d = torch.stack((a, b, n), dim=-1)
-    e = torch.argmax(m, dim=-1)
+    c = torch.cat((a, b), dim=-1) #(1,4)
+    d = torch.stack((a, b, n), dim=-1) #(1,2,3)
+    e = torch.argmax(m, dim=-1) #最后一维的最大值的序号 (2,1)
     f = m.transpose(0,1)
     g = m.permute(1,0,2)
-    h = m.squeeze() #squeeze里面有参数，就代表只看该维是否是1
-    i = m.unsqueeze(2)
+    h = m.squeeze() #squeeze里面有参数，就代表只看该维是否是1 (2,4)
+    i = m.unsqueeze(2) #unsqueeze,在dim=2的位置新增维度1 (2,1,1,4)
     val,index = o.max(dim=1) #和topk一样显示val，再是Index
     sort_val, indices = torch.sort(o, dim=1, descending = True) #dim=1，代表列发生变化
 
-    na = np.arange(12).reshape(3,4)
-    nb = np.arange(12).reshape(3,4)
-    print(np.vstack((na,nb)).shape) #(6,4)((na,nb))里面要打括号，因为这样子就相当于是一个参数的位置了
-    print(np.hstack((na,nb)).shape) #(3,8)
-    print(np.concatenate((na,nb),axis=1).shape) #(3,8)
+    print('m',m)
     print('a', a)
     print('b', b)
     print('n', n)
     print('c', c.shape)
     print('d', d.shape,d)
-    print('e', e.shape)
+    print('e', e.shape, e)
     print('f', f.shape)
     print('g', g.shape)
     print('h', h.shape)
@@ -42,6 +44,25 @@ def exp_dim():
     print('o',o)
     print('val',val,'index',index)
     print('sort_val',sort_val,'\n','indices',indices)
+
+    """
+    numpy的操作
+    """
+    nm = np.array([3,4])
+    na = np.arange(12).reshape(3,4)
+    nb = np.arange(12).reshape(3,4)
+    nc = np.vstack((na,nb))
+    nd = np.hstack((na,nb))
+    ne = np.concatenate((na,nb),axis=1)
+    nf = np.tile(nm,(2,1)) #和torch.repeat()一样，沿着某一方向复制
+    ng = np.transpose(1,0) #和torch.permute()一样
+    nh = nm.astype(np.float32) #在图像从numpy变到torch的时候，先要变换维度，然后要变换数据类型(因为权重的类型是floattensor,而最初的图像的类型是uint8,如果不变会报错Input type (torch.cuda.ByteTensor) and weight type (torch.cuda.FloatTensor) should be the same)
+    #除法运算,常规的/返回的就是真值(可以是小数,也可以是整数),//是地板除(即返回的是最小的整数),round返回的是四舍五入后的浮点数
+    print('nm',nm)
+    print('nc', nc.shape) #(6,4)((na,nb))里面要打括号，因为这样子就相当于是一个参数的位置了
+    print('nd', nd.shape) #(3,8)
+    print('ne',ne.shape) #(3,8)
+    print('nf',nf.shape) #(2,2)
 
 def print_indx():
     print('loss[{0}]'.format(1))
@@ -154,13 +175,13 @@ def cv2_exp():
     可以看出对于mean来说只是把第一个和第三个位置换了一下,数值大小差不多,std3个之间差不多
     img_norm_cfg的数值应该就是使用cv2.meanStdDev求出每个图像的mean和std，再求平均
     """
-    img = cv2.imread('../1.jpg')
+    img = cv2.imread('../1.jpg') 
     img_rgb=cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # cv2默认为bgr顺序
     img_rgb_mean, img_rgb_std = cv2.meanStdDev(img_rgb)
     img_rgb_mean = img_rgb_mean.squeeze(1)
     img_rgb_std = img_rgb_std.squeeze(1)
     img_rgb = (img_rgb-img_rgb_mean)/img_rgb_std
-    cv2.imshow('img_rgb', img_rgb)
+    cv2.imshow('img_rgb', img_rgb) #使用cv2.imshow()注意输入的需要是numpy,(h,w,3)形式的 (因为有些经过torch变化后，就是(1,3,h,w))
     cv2.waitKey (0)
     cv2.destroyAllWindows()
 
@@ -194,6 +215,9 @@ def cuda_exp():
     ])
     c = b.cuda() #如果在定义b的时候就.cuda()那么b就在cuda上，而现在b是在cpu上，c是在cuda上
     print(a*c)
+    """
+    cpu和gpu之间的装换，在torch中，.data.cpu()   .data.cuda()  必须要加data
+    """
 
 def index_exp():
     m = [0,2]
@@ -230,6 +254,10 @@ def index_exp():
     inside_flags = torch.tensor([3,4,5])
     expand_inside_flags = inside_flags[:,None].expand(-1,9).reshape(-1)
     print(expand_inside_flags)
+
+    """
+    切片的时候,要用[],注意[:,0]和[:][0]是不一样的,后者其实和[0]是一样的效果。而[2][0]和[2,0]是一样的
+    """
 
 
 def plt_exp():
@@ -369,4 +397,37 @@ def basic_grammer_exp():
     labels = torch.tensor([0, 1])
     if 0 in labels:
         print(0)
+    
+    """
+    any的用法any() 函数用于判断给定的可迭代参数 iterable 是否全部为 False，则返回 False，如果有一个为 True，则返回 True。
+    元素除了是 0、空、FALSE 外都算 TRUE。
+    """
+    if any([0,0,0,0]): #False
+        print(1)
+    else: 
+        print(2)
+    """
+    对于函数中，可以定义变量如arg = np.array([0]),这样在下边可以使用if arg.any()来判断该函数是否被使用，如果不对arg赋值，那么在用函数的时候必须传该参数
+    """
+    
+def net_exp():
+    inputs = torch.randn(1,4,5,5)
+    filters1 = torch.randn(8,4,3,3)#有8种4通道的3x3的卷积核
+    filters2 = torch.randn(1,4,3,3)
+    filters2 = filters2.view(4,1,3,3)
+    #out1 (1,8,5,5) out2(1,4,5,5)
+    out1 = F.conv2d(inputs, filters1, padding=1) #F.conv2d是函数(在pytorch中小写的一般是函数),是卷积操作，nn.Conv2d是类，是卷积层
+    out2 = F.conv2d(inputs, filters2, padding=1, groups=4)
+
+class model_exp(nn.Module):
+    def __init__(self):
+        super(model_exp, self).__init__()
+        self.add_module(
+            'downsample'+str(1),nn.Conv2d(3,64,3) #使用add.module的方法
+        )
+    def forward(self,x):# forward(在卷积中输入的x必须是4个维度的)
+        layer = getattr(self,'downsample'+str(1))
+        out = layer(x)
+        return out
+
 if __name__ == '__main__':
