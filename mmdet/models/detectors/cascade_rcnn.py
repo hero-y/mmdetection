@@ -9,6 +9,7 @@ from .. import builder
 from ..registry import DETECTORS
 from .base import BaseDetector
 from .test_mixins import RPNTestMixin
+import cv2
 
 
 @DETECTORS.register_module
@@ -33,13 +34,13 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
 
         self.num_stages = num_stages
         self.backbone = builder.build_backbone(backbone)
-
+        
         if neck is not None:
             self.neck = builder.build_neck(neck)
-
+        
         if rpn_head is not None:
             self.rpn_head = builder.build_head(rpn_head)
-
+        
         if shared_head is not None:
             self.shared_head = builder.build_shared_head(shared_head)
 
@@ -404,6 +405,13 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
 
         return results
 
+    #如果要用aug_test,需要加上Object365中写的代码，其中在cfg文件中，flip设置成True之后，就会在test_aug中去把flip设置成
+    #[Flase,True]即一次不翻转，一次翻转，分别把这几张图依次经过transform,再放到一个List中，所以在forwar test中判断图像数多余1时
+    #就进入aug_test,其中包括rpn增广测试和bbox增广测试，对于faster rcnn两个都有,而cascade rcnn中要自己写bbox增广测试，
+    #总体思路就是先把一张图片去做尺度增广和flip之后(这里的flip，如果在医学图像中，适合用翻转90,180,270,而这三个每个都要生成一个图，所以在cfg中
+    #设置List来实现)，这样就生成了多张图，然后进入aug_test,先经过aug_test_rpn这里对多个图像依次操作，最后使用了merge_aug_proposals，
+    #在这里用了bbox_mapping_back，(可能是为了单阶段网络可以直接使用)所以aug_test_rpn出来的Proposal是基于原图的位置，所以在
+    #aug_test_bbox中要再一次使用bbox_mapping,并在最后又使用了bbox_mapping_back
     def aug_test(self, img, img_meta, proposals=None, rescale=False):
         raise NotImplementedError
 

@@ -5,6 +5,7 @@ from numpy import random
 
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
 from ..registry import PIPELINES
+import cv2
 
 #gt_masks的大小即为图像的大小，有物体的像素位置为1，其余地方为0
 @PIPELINES.register_module
@@ -150,7 +151,14 @@ class Resize(object):
             self._random_scale(results)
         self._resize_img(results)
         self._resize_bboxes(results)
-        self._resize_masks(results)
+        self._resize_masks(results) #此时的gt的坐标已经是x,y,x,y了 
+        #在coco.py的_parse_ann_info中已经把
+        # print('bbox',results['gt_bboxes'])
+        # anno = results['gt_bboxes']
+        # for k in range(0, len(results['gt_bboxes'])):
+        #     cv2.rectangle(results['img'],(anno[k][0],anno[k][1]),(anno[k][2],anno[k][3]),(255,0,0)) 
+        # cv2.imshow('img',results['img'])
+        # cv2.waitKey(0)
         return results
 
     def __repr__(self):
@@ -200,11 +208,23 @@ class RandomFlip(object):
             results['flip'] = flip
         if results['flip']:
             # flip image
+            # anno = results['gt_bboxes']
+            # for k in range(0, len(results['gt_bboxes'])):
+            #     cv2.rectangle(results['img'],(anno[k][0],anno[k][1]),(anno[k][2],anno[k][3]),(255,0,0)) 
+            # cv2.imshow('img',results['img'])
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
             results['img'] = mmcv.imflip(results['img'])
             # flip bboxes
             for key in results.get('bbox_fields', []):
                 results[key] = self.bbox_flip(results[key],
                                               results['img_shape'])
+            # anno1 = results['gt_bboxes']
+            # for k in range(0, len(results['gt_bboxes'])):
+            #     cv2.rectangle(results['img'],(anno1[k][0],anno1[k][1]),(anno1[k][2],anno1[k][3]),(255,0,0)) 
+            # cv2.imshow('img',results['img'])
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
             # flip masks
             for key in results.get('mask_fields', []):
                 results[key] = [mask[:, ::-1] for mask in results[key]]
@@ -214,6 +234,234 @@ class RandomFlip(object):
         return self.__class__.__name__ + '(flip_ratio={})'.format(
             self.flip_ratio)
 
+@PIPELINES.register_module
+class RandomVerticalFlip(object):
+    """Flip the image & bbox.
+
+    If the input dict contains the key "flip", then the flag will be used,
+    otherwise it will be randomly decided by a ratio specified in the init
+    method.
+
+    Args:
+        flip_ratio (float, optional): The flipping probability.
+    """
+
+    def __init__(self, flip_ratio=None):
+        self.flip_ratio = flip_ratio
+        if flip_ratio is not None:
+            assert flip_ratio >= 0 and flip_ratio <= 1
+
+    def bbox_flip(self, bboxes, img_shape):
+        """Flip bboxes vertically.
+
+        Args:
+            bboxes(ndarray): shape (..., 4*k)
+            img_shape(tuple): (height, width)
+        """
+        assert bboxes.shape[-1] % 4 == 0
+        h = img_shape[0]
+        flipped = bboxes.copy()
+        flipped[..., 1::4] = h - bboxes[..., 3::4] - 1
+        flipped[..., 3::4] = h - bboxes[..., 1::4] - 1
+        return flipped
+
+    def __call__(self, results):
+        if 'verticalflip' not in results:
+            flip = True if np.random.rand() < self.flip_ratio else False
+            results['verticalflip'] = flip
+        if results['verticalflip']:
+            # flip image
+            results['img'] = mmcv.imflip(results['img'],direction = 'vertical')
+            # flip bboxes
+            for key in results.get('bbox_fields', []):
+                results[key] = self.bbox_flip(results[key],
+                                              results['img_shape'])
+            # flip masks
+            for key in results.get('mask_fields', []):
+                results[key] = [mask[::-1, :] for mask in results[key]]
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(flip_ratio={})'.format(
+            self.flip_ratio)
+
+@PIPELINES.register_module
+class RandomRotate90(object): #顺时针旋转90度
+    """Flip the image & bbox.
+
+    If the input dict contains the key "flip", then the flag will be used,
+    otherwise it will be randomly decided by a ratio specified in the init
+    method.
+
+    Args:
+        flip_ratio (float, optional): The flipping probability.
+    """
+
+    def __init__(self, flip_ratio=None):
+        self.flip_ratio = flip_ratio
+        if flip_ratio is not None:
+            assert flip_ratio >= 0 and flip_ratio <= 1
+
+    def bbox_flip(self, bboxes, img_shape):
+        """Flip bboxes 90.
+
+        Args:
+            bboxes(ndarray): shape (..., 4*k)
+            img_shape(tuple): (height, width)
+        """
+        assert bboxes.shape[-1] % 4 == 0
+        H = img_shape[0]
+        W = img_shape[1]
+        x = bboxes[..., 0::4].copy()
+        y = bboxes[..., 1::4].copy()
+        w = (bboxes[..., 2::4] - bboxes[..., 0::4]).copy()
+        h = (bboxes[..., 3::4] - bboxes[..., 1::4]).copy()
+        bboxes[..., 0::4] = H - h - y 
+        bboxes[..., 1::4] = x
+        bboxes[..., 2::4] = h + bboxes[..., 0::4]
+        bboxes[..., 3::4] = w + bboxes[..., 1::4]
+
+        return bboxes
+
+    def __call__(self, results):
+        if 'flip90' not in results:
+            flip = True if np.random.rand() < self.flip_ratio else False
+            results['flip90'] = flip
+        if results['flip90']:
+            # flip image
+            results['img'] = cv2.transpose(results['img'])
+            results['img'] = cv2.flip(results['img'],1)
+            # flip bboxes
+            for key in results.get('bbox_fields', []):
+                results[key] = self.bbox_flip(results[key],
+                                              results['img_shape'])
+            H = results['img_shape'][0] #旋转90度后矩形的长宽也要变！！！
+            W = results['img_shape'][1]
+            results['img_shape'] = list(results['img_shape'])
+            results['img_shape'][0] = W
+            results['img_shape'][1] = H
+            results['img_shape'] = tuple(results['img_shape'])
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(flip_ratio={})'.format(
+            self.flip_ratio)
+
+@PIPELINES.register_module
+class RandomRotate180(object): #顺时针旋转180度
+    """Flip the image & bbox.
+
+    If the input dict contains the key "flip", then the flag will be used,
+    otherwise it will be randomly decided by a ratio specified in the init
+    method.
+
+    Args:
+        flip_ratio (float, optional): The flipping probability.
+    """
+
+    def __init__(self, flip_ratio=None):
+        self.flip_ratio = flip_ratio
+        if flip_ratio is not None:
+            assert flip_ratio >= 0 and flip_ratio <= 1
+
+    def bbox_flip(self, bboxes, img_shape):
+        """Flip bboxes 180.
+
+        Args:
+            bboxes(ndarray): shape (..., 4*k)
+            img_shape(tuple): (height, width)
+        """
+        assert bboxes.shape[-1] % 4 == 0
+        H = img_shape[0]
+        W = img_shape[1]
+        x = bboxes[..., 0::4].copy()
+        y = bboxes[..., 1::4].copy()
+        w = (bboxes[..., 2::4] - bboxes[..., 0::4]).copy()
+        h = (bboxes[..., 3::4] - bboxes[..., 1::4]).copy()
+        bboxes[..., 0::4] = W - x - w
+        bboxes[..., 1::4] = H - y - h
+        bboxes[..., 2::4] = w + bboxes[..., 0::4]
+        bboxes[..., 3::4] = h + bboxes[..., 1::4]
+
+        return bboxes
+
+    def __call__(self, results):
+        if 'flip180' not in results:
+            flip = True if np.random.rand() < self.flip_ratio else False
+            results['flip180'] = flip
+        if results['flip180']:
+            results['img'] = cv2.flip(results['img'],0)
+            results['img'] = cv2.flip(results['img'],1)
+            # flip bboxes
+            for key in results.get('bbox_fields', []):
+                results[key] = self.bbox_flip(results[key],
+                                              results['img_shape'])
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(flip_ratio={})'.format(
+            self.flip_ratio)
+
+@PIPELINES.register_module
+class RandomRotate270(object): #顺时针旋转270度
+    """Flip the image & bbox.
+
+    If the input dict contains the key "flip", then the flag will be used,
+    otherwise it will be randomly decided by a ratio specified in the init
+    method.
+
+    Args:
+        flip_ratio (float, optional): The flipping probability.
+    """
+
+    def __init__(self, flip_ratio=None):
+        self.flip_ratio = flip_ratio
+        if flip_ratio is not None:
+            assert flip_ratio >= 0 and flip_ratio <= 1
+
+    def bbox_flip(self, bboxes, img_shape):
+        """Flip bboxes 270.
+
+        Args:
+            bboxes(ndarray): shape (..., 4*k)
+            img_shape(tuple): (height, width)
+        """
+        assert bboxes.shape[-1] % 4 == 0
+        H = img_shape[0]
+        W = img_shape[1]
+        x = bboxes[..., 0::4].copy()
+        y = bboxes[..., 1::4].copy()
+        w = (bboxes[..., 2::4] - bboxes[..., 0::4]).copy()
+        h = (bboxes[..., 3::4] - bboxes[..., 1::4]).copy()
+        bboxes[..., 0::4] = y
+        bboxes[..., 1::4] = W - x - w
+        bboxes[..., 2::4] = h + bboxes[..., 0::4]
+        bboxes[..., 3::4] = w + bboxes[..., 1::4]
+
+        return bboxes
+
+    def __call__(self, results):
+        if 'flip270' not in results:
+            flip = True if np.random.rand() < self.flip_ratio else False
+            results['flip270'] = flip
+        if results['flip270']:
+            results['img'] = cv2.transpose(results['img'])
+            results['img'] = cv2.flip(results['img'],0)
+            # flip bboxes
+            for key in results.get('bbox_fields', []):
+                results[key] = self.bbox_flip(results[key],
+                                              results['img_shape'])
+            H = results['img_shape'][0] #旋转90度后矩形的长宽也要变！！！
+            W = results['img_shape'][1]
+            results['img_shape'] = list(results['img_shape'])
+            results['img_shape'][0] = W
+            results['img_shape'][1] = H
+            results['img_shape'] = tuple(results['img_shape'])
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(flip_ratio={})'.format(
+            self.flip_ratio)
 
 @PIPELINES.register_module
 class Pad(object):
@@ -259,6 +507,11 @@ class Pad(object):
     def __call__(self, results):
         self._pad_img(results)
         self._pad_masks(results)
+        # anno = results['gt_bboxes']
+        # for k in range(0, len(results['gt_bboxes'])):
+        #     cv2.rectangle(results['img'],(anno[k][0],anno[k][1]),(anno[k][2],anno[k][3]),(255,0,0)) 
+        # cv2.imshow('img',results['img'])
+        # cv2.waitKey(0)
         return results
 
     def __repr__(self):
