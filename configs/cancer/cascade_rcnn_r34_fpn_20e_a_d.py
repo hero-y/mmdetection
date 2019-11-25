@@ -206,8 +206,8 @@ data = dict(
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotations/train.json',
-        img_prefix=data_root + 'target/',
+        ann_file=data_root + 'val_annotations/val.json',
+        img_prefix=data_root + 'val/',
         pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='SGD', lr=0.0025, momentum=0.9, weight_decay=0.0001) #一张卡要变成0.0025 8张卡是0.02
