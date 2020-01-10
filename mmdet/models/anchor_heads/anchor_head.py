@@ -86,11 +86,17 @@ class AnchorHead(nn.Module):
         self.fp16_enabled = False
 
         self.anchor_generators = []  #定义一个List，对anchor的基本大小做迭代，实例化了每一层的AnchorGenerator,都append到这个List中
-        for anchor_base in self.anchor_base_sizes: #用for in做了一次迭代，每次只输入一个anchor_base进去
-            self.anchor_generators.append(
-                AnchorGenerator(anchor_base, anchor_scales, anchor_ratios))
-
-        self.num_anchors = len(self.anchor_ratios) * len(self.anchor_scales)
+        if isinstance (self.anchor_scales[0],list):
+            for i ,anchor_base in enumerate(self.anchor_base_sizes): #用for in做了一次迭代，每次只输入一个anchor_base进去
+                anchor_scales = self.anchor_scales[i]
+                self.anchor_generators.append(
+                    AnchorGenerator(anchor_base, anchor_scales, anchor_ratios))
+            self.num_anchors = len(self.anchor_ratios) * len(anchor_scales)
+        else:
+            for anchor_base in self.anchor_base_sizes: #用for in做了一次迭代，每次只输入一个anchor_base进去
+                self.anchor_generators.append(
+                    AnchorGenerator(anchor_base, anchor_scales, anchor_ratios))
+            self.num_anchors = len(self.anchor_ratios) * len(self.anchor_scales)
         self._init_layers()
 
     def _init_layers(self):

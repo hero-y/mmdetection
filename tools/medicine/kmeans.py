@@ -102,3 +102,24 @@ if __name__ == "__main__":
     print("init_centroids=",centroids)
     kmeans(annotation_dims,centroids,eps)
 
+    #绘制比例图
+    # train_data_split_annotations = '/media/hero-y/机械盘T1/Tianchi/medicine/annotations'
+    # ws=[]
+    # hs=[]
+    # ratios = []
+    # for data in os.listdir(train_data_split_annotations):
+    #     json_datas = os.path.join(train_data_split_annotations, data)
+    #     with open(json_datas,'r') as f:
+    #         labels = json.load(f)
+    #     for label in labels:
+    #         if label['class'] not in ['roi']:
+    #             ratio = label['h']/label['w']
+    #             ratios.append(ratio)
+                
+    # ratios = np.array(ratios)
+    # # plt.figure("train_data_ratio")
+    # plt.hist(ratios, bins=10, normed=0, facecolor="blue", edgecolor="black", alpha=0.7)
+    # plt.xlim((0,3))
+    # plt.xticks(np.arange(0,3,0.1))
+    # plt.show()
+

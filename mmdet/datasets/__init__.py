@@ -10,10 +10,11 @@ from .voc import VOCDataset
 from .wider_face import WIDERFaceDataset
 from .xml_style import XMLDataset
 from .cancer import CancerDataset
+from .cancer_final import CancerFinalDataset
 
 __all__ = [
     'CustomDataset', 'XMLDataset', 'CocoDataset', 'VOCDataset','CancerDataset',
-    'CityscapesDataset', 'GroupSampler', 'DistributedGroupSampler',
+    'CancerFinalDataset','CityscapesDataset', 'GroupSampler', 'DistributedGroupSampler',
     'build_dataloader', 'ConcatDataset', 'RepeatDataset', 'ExtraAugmentation',
     'WIDERFaceDataset', 'DATASETS', 'build_dataset'
 ]

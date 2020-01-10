@@ -11,6 +11,9 @@ from mmdet.apis import (get_root_logger, init_dist, set_random_seed,
 from mmdet.datasets import build_dataset
 from mmdet.models import build_detector
 
+# debug
+# import multiprocessing
+# multiprocessing.set_start_method('spawn',True)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
@@ -50,6 +53,7 @@ def main():
     args = parse_args()
 
     cfg = Config.fromfile(args.config)  #Config在mmcv中
+    # cfg = Config.fromfile('configs/faster_rcnn_r50_fpn_1x.py') 
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
