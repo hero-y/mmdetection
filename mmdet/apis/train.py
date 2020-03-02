@@ -225,7 +225,11 @@ def _non_dist_train(model, dataset, cfg, validate=False):
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
-    runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
+    if len(cfg.workflow) == 1:
+        runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
+    elif len(cfg.workflow) == 2:
+        runner.run_and_val(data_loaders, cfg.workflow, cfg.total_epochs, cfg)#目前仅仅支持VOC 
+    # runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
     """
     只有run函数中的logger.info才会保存在文件中
     使用self.call_hook函数，传入的是before_run,before run, before train epoch, after train epoch,

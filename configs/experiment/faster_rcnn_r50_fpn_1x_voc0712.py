@@ -172,4 +172,4 @@ log_level = 'INFO'
 work_dir = './work_dirs/experiment/faster_rcnn_r50_fpn_1x_voc0712'
 load_from = None
 resume_from = None
-workflow = [('train', 1)]
+workflow = [('train', 1),('val',1)]
