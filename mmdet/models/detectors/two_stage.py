@@ -148,7 +148,7 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
             proposal_cfg = self.train_cfg.get('rpn_proposal',
                                               self.test_cfg.rpn)
             proposal_inputs = rpn_outs + (img_meta, proposal_cfg)
-            proposal_list = self.rpn_head.get_bboxes(*proposal_inputs)
+            proposal_list = self.rpn_head.get_bboxes(*proposal_inputs)#[img1,img2] img1:(n1,5) img2:(n2,5)代表所有level的结果
         else:
             proposal_list = proposals
 
@@ -176,17 +176,18 @@ class TwoStageDetector(BaseDetector, RPNTestMixin, BBoxTestMixin,
 
         # bbox head forward and loss
         if self.with_bbox:
-            rois = bbox2roi([res.bboxes for res in sampling_results])
+            #bbox2roi：input:[(n1,4),(n2,4)] output:(n1+n2,5) 5的意思是[img_id,x1,y1,x2,y2]
+            rois = bbox2roi([res.bboxes for res in sampling_results])#bbox2roi里面的意思是把一个图像中的经过sample后的pos_bbox和neg_bbox取出来
             # TODO: a more flexible way to decide which feature maps to use
             bbox_feats = self.bbox_roi_extractor(
-                x[:self.bbox_roi_extractor.num_inputs], rois)
+                x[:self.bbox_roi_extractor.num_inputs], rois) #(n1+n2,256,7,7)
             if self.with_shared_head:
                 bbox_feats = self.shared_head(bbox_feats)
             cls_score, bbox_pred = self.bbox_head(bbox_feats)
 
             bbox_targets = self.bbox_head.get_target(sampling_results,
                                                      gt_bboxes, gt_labels,
-                                                     self.train_cfg.rcnn)
+                                                     self.train_cfg.rcnn)#在assign和saple的时候已经确定了对象，这里只是为了生成label,label_weight,和bbox的偏移量...
             loss_bbox = self.bbox_head.loss(cls_score, bbox_pred,
                                             *bbox_targets)
             losses.update(loss_bbox)

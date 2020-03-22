@@ -71,11 +71,11 @@ class SingleStageDetector(BaseDetector):
         x = self.extract_feat(img)
         outs = self.bbox_head(x)
         bbox_inputs = outs + (img_meta, self.test_cfg, rescale)
-        bbox_list = self.bbox_head.get_bboxes(*bbox_inputs)
+        bbox_list = self.bbox_head.get_bboxes(*bbox_inputs)#对img的list，但是正常test是一张一张图像做的所以其实也就一张图
         bbox_results = [
             bbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)
             for det_bboxes, det_labels in bbox_list
-        ]
+        ]#det_bboxes:(n,5) det_labels:(n,)
         return bbox_results[0]
 
     def aug_test(self, imgs, img_metas, rescale=False):

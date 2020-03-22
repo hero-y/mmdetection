@@ -173,7 +173,7 @@ def bbox2result(bboxes, labels, num_classes):
     else:
         bboxes = bboxes.cpu().numpy()
         labels = labels.cpu().numpy()
-        return [bboxes[labels == i, :] for i in range(num_classes - 1)]
+        return [bboxes[labels == i, :] for i in range(num_classes - 1)]#原始的bboxes和labels都是按照level进行cat的，现在变成按照类(label从0开始)
 
 
 def distance2bbox(points, distance, max_shape=None):

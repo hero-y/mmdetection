@@ -60,7 +60,7 @@ def bbox_target_single(pos_bboxes,
         label_weights[:num_pos] = pos_weight
         pos_bbox_targets = bbox2delta(pos_bboxes, pos_gt_bboxes, target_means,
                                       target_stds)
-        bbox_targets[:num_pos, :] = pos_bbox_targets
+        bbox_targets[:num_pos, :] = pos_bbox_targets#对于两维及以上的赋值或取值的时候一定要如[(0,1),:]，而不是[(0,1)]后者会被当成取第0行第1列
         bbox_weights[:num_pos, :] = 1
     if num_neg > 0:
         label_weights[-num_neg:] = 1.0  #在分类任务中，正负样本都用了，因为label_weight的正负样本的权重都为1，而在bbox的坐标任务中，只用了正样本的Loss,控制用没用是通过权重来控制的，bbox_weights的负样本的权重为0

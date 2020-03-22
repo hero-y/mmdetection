@@ -101,7 +101,7 @@ class RPNHead(AnchorHead):
             proposals = proposals[:cfg.nms_post, :]  #cfg.nms_post是2000，代表nms后最对每层有多少个proposal，这是因为如果nms_pre设置的很大如4000个nms后也很多，此时nms_post才会起作用，但目前nms_pre和nms_post都是2000，则nms_post就没什么作用了
             mlvl_proposals.append(proposals) #.append是在for中使用的，每结束一个就添加一个
         proposals = torch.cat(mlvl_proposals, 0)
-        if cfg.nms_across_levels:
+        if cfg.nms_across_levels:#不进入 ，里面实现的功能是对于所有层再一起使用一下nms
             proposals, _ = nms(proposals, cfg.nms_thr)
             proposals = proposals[:cfg.max_num, :]
         else: #进入

@@ -56,6 +56,8 @@ def multiclass_nms(multi_bboxes,
             _scores *= score_factors[cls_inds]
         cls_dets = torch.cat([_bboxes, _scores[:, None]], dim=1)  #先把bbox和score拼接到一起,前四个是坐标,最后一个是分数score用[:,None]增维
         cls_dets, _ = nms_op(cls_dets, **nms_cfg_)  #用nms,nms需要使用分数信息
+        #注意下面生成label的方式:因为每个位置会预测80个置信分数，并不是说只取最大的置信分数对应的类作为bbox的类
+        #因为score_thr比较小，所以对每一个类都进行一次判断是不是大于score,即一个bbox可能会有多个类出现
         cls_labels = multi_bboxes.new_full((cls_dets.shape[0], ),
                                            i - 1,
                                            dtype=torch.long)  #把bbox和label对应起来

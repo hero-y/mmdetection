@@ -131,8 +131,8 @@ class BBoxHead(nn.Module):
                 pos_bbox_pred,
                 bbox_targets[pos_inds],
                 bbox_weights[pos_inds],
-                avg_factor=bbox_targets.size(0),
-                reduction_override=reduction_override)
+                avg_factor=bbox_targets.size(0),#即是提前把pos_ind取出来，使用的avg_factor也是正负一起的数量
+                reduction_override=reduction_override)#在bbox求loss的时候提前把pos_inds的pred取出来，而不是像retinanet那样对所有pred求loss然后再用weight去限制
         return losses
 
     #在test中用,softmax+delta2bbox+rescale+multiclass_nms

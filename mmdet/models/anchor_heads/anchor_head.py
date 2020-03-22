@@ -84,11 +84,10 @@ class AnchorHead(nn.Module):
         self.loss_cls = build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
         self.fp16_enabled = False
-
         self.anchor_generators = []  #定义一个List，对anchor的基本大小做迭代，实例化了每一层的AnchorGenerator,都append到这个List中
         for anchor_base in self.anchor_base_sizes: #用for in做了一次迭代，每次只输入一个anchor_base进去
             self.anchor_generators.append(
-                AnchorGenerator(anchor_base, anchor_scales, anchor_ratios))
+                AnchorGenerator(anchor_base, anchor_scales, anchor_ratios))#anchor_scales和anchor_ratios一直都是3个，base每次都是一个
 
         self.num_anchors = len(self.anchor_ratios) * len(self.anchor_scales)
         self._init_layers()
@@ -148,6 +147,7 @@ class AnchorHead(nn.Module):
             valid_flag_list.append(multi_level_flags)
 
         return anchor_list, valid_flag_list #二者都是里面有多个图像，每个图像有多个层级
+        #如果batch是2:anchor_list形如[[],[]],每个list里面还有5个值(K*A,4)
 
     def loss_single(self, cls_score, bbox_pred, labels, label_weights,
                     bbox_targets, bbox_weights, num_total_samples, cfg):
@@ -261,7 +261,7 @@ class AnchorHead(nn.Module):
             cls_score = cls_score.permute(1, 2,
                                           0).reshape(-1, self.cls_out_channels)
             #.permute(1,2,0)的目的是把通道维数放到最后的位置，所以就是最先被取出来的，所以把一个位置的anchor放到一起
-            if self.use_sigmoid_cls:
+            if self.use_sigmoid_cls:#在train的时候其实是对pre的sigmoid或者softmax做loss，所以在测时候的时候要手动sigmoid/softmax
                 scores = cls_score.sigmoid()  #二分类问题，使用sigmoid将pred限制在(0,1)
             else:
                 scores = cls_score.softmax(-1)
@@ -276,7 +276,7 @@ class AnchorHead(nn.Module):
                 _, topk_inds = max_scores.topk(nms_pre)
                 anchors = anchors[topk_inds, :]  #类别分数前2000个anchor (2000,4)
                 bbox_pred = bbox_pred[topk_inds, :] #(2000,4)
-                scores = scores[topk_inds, :] #(2000,)
+                scores = scores[topk_inds, :] #(2000,80)/(2000,81)
             bboxes = delta2bbox(anchors, bbox_pred, self.target_means,
                                 self.target_stds, img_shape)
             mlvl_bboxes.append(bboxes)
@@ -285,7 +285,7 @@ class AnchorHead(nn.Module):
         if rescale:
             mlvl_bboxes /= mlvl_bboxes.new_tensor(scale_factor)
         mlvl_scores = torch.cat(mlvl_scores)
-        if self.use_sigmoid_cls:
+        if self.use_sigmoid_cls:#因为use_sigmoid_cls后score是(n,80),把它变成(n,81),这样主要是因为在multiclass_nms统一使用for i in range(1, num_classes):
             padding = mlvl_scores.new_zeros(mlvl_scores.shape[0], 1)
             mlvl_scores = torch.cat([padding, mlvl_scores], dim=1)  #(mlvl_scores.shape[0],2) (一共的proposal的数量,2)
         det_bboxes, det_labels = multiclass_nms(mlvl_bboxes, mlvl_scores,
