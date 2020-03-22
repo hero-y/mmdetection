@@ -16,11 +16,11 @@ from .env import get_root_logger
 
 def parse_losses(losses):
     log_vars = OrderedDict()
-    for loss_name, loss_value in losses.items():
+    for loss_name, loss_value in losses.items():#losses.item()是解析dict
         if isinstance(loss_value, torch.Tensor):
             log_vars[loss_name] = loss_value.mean()
         elif isinstance(loss_value, list):
-            log_vars[loss_name] = sum(_loss.mean() for _loss in loss_value)
+            log_vars[loss_name] = sum(_loss.mean() for _loss in loss_value)#对于retinanet来说是把5个level的loss相加，并没有/5
         else:
             raise TypeError(
                 '{} is not a tensor or list of tensors'.format(loss_name))
@@ -184,7 +184,10 @@ def _dist_train(model, dataset, cfg, validate=False):
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
-    runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
+    if len(cfg.workflow) == 1:
+        runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
+    elif len(cfg.workflow) == 2:
+        runner.run_and_val(data_loaders, cfg.workflow, cfg.total_epochs, cfg, dist=True)#单gpu和多gpu都支持;voc和coco都支持;每训练一次就会评估一次并保存结果
 
 
 def _non_dist_train(model, dataset, cfg, validate=False):
@@ -225,7 +228,10 @@ def _non_dist_train(model, dataset, cfg, validate=False):
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
-    runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
+    if len(cfg.workflow) == 1:
+        runner.run(data_loaders, cfg.workflow, cfg.total_epochs)
+    elif len(cfg.workflow) == 2:
+        runner.run_and_val(data_loaders, cfg.workflow, cfg.total_epochs, cfg, dist=False)#单gpu和多gpu都支持;voc和coco都支持;每训练一次就会评估一次并保存结果
     """
     只有run函数中的logger.info才会保存在文件中
     使用self.call_hook函数，传入的是before_run,before run, before train epoch, after train epoch,

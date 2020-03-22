@@ -10,7 +10,7 @@ from mmdet.apis import (get_root_logger, init_dist, set_random_seed,
                         train_detector)
 from mmdet.datasets import build_dataset
 from mmdet.models import build_detector
-
+import copy
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
@@ -82,9 +82,14 @@ def main():
 
     model = build_detector(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
-
+    print(model)
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:
+        val_dataset = copy.deepcopy(cfg.data.val)
+        if cfg.dataset_type == 'VOCDataset':
+            val_dataset.pipeline = cfg.data.train.dataset.pipeline
+        elif cfg.dataset_type == 'CocoDataset':
+            val_dataset.pipeline = cfg.data.train.pipeline
         datasets.append(build_dataset(cfg.data.val))
     if cfg.checkpoint_config is not None: #checkpoint_config = dict(interval=1)
         # save mmdet version, config file content and class names in
