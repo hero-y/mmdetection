@@ -32,15 +32,19 @@ def voc_eval(result_file, dataset, iou_thr=0.5):
         dataset_name = 'voc07'
     else:
         dataset_name = dataset.CLASSES
-    eval_map(
-        det_results,
-        gt_bboxes,
-        gt_labels,
-        gt_ignore=gt_ignore,
-        scale_ranges=None,
-        iou_thr=iou_thr,
-        dataset=dataset_name,
-        print_summary=True)
+    #print ap.5 ap.75 ap.8 ap.9
+    iou_thrs = [0.5,0.75,0.8,0.9]
+    for iou_thr in iou_thrs:
+        print("iou_thr eval",iou_thr)
+        eval_map(
+            det_results,
+            gt_bboxes,
+            gt_labels,
+            gt_ignore=gt_ignore,
+            scale_ranges=None,
+            iou_thr=iou_thr,
+            dataset=dataset_name,
+            print_summary=True)
 
 
 def main():
@@ -55,7 +59,7 @@ def main():
     args = parser.parse_args()
     cfg = mmcv.Config.fromfile(args.config)
     test_dataset = mmcv.runner.obj_from_dict(cfg.data.test, datasets)
-    voc_eval(args.result, test_dataset, args.iou_thr)
+    voc_eval(args.result, test_dataset, args.iou_thr) #print ap.5 ap.75 ap.8 ap.9
 
 
 if __name__ == '__main__':
