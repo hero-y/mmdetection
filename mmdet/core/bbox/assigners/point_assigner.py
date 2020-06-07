@@ -55,11 +55,11 @@ class PointAssigner(BaseAssigner):
         num_gts, num_points = gt_bboxes.shape[0], points.shape[0]
 
         # assign gt box
-        gt_bboxes_xy = (gt_bboxes[:, :2] + gt_bboxes[:, 2:]) / 2
-        gt_bboxes_wh = (gt_bboxes[:, 2:] - gt_bboxes[:, :2]).clamp(min=1e-6)
-        scale = self.scale
+        gt_bboxes_xy = (gt_bboxes[:, :2] + gt_bboxes[:, 2:]) / 2 #x,y的坐标
+        gt_bboxes_wh = (gt_bboxes[:, 2:] - gt_bboxes[:, :2]).clamp(min=1e-6) #
+        scale = self.scale #4
         gt_bboxes_lvl = ((torch.log2(gt_bboxes_wh[:, 0] / scale) +
-                          torch.log2(gt_bboxes_wh[:, 1] / scale)) / 2).int()#为什么scale取4
+                          torch.log2(gt_bboxes_wh[:, 1] / scale)) / 2).int() #log2(sqrt(w*h)/4) = 1/2 * (log2(w/4)+log2(h/4))
         gt_bboxes_lvl = torch.clamp(gt_bboxes_lvl, min=lvl_min, max=lvl_max)
 
         # stores the assigned gt index of each point
@@ -81,10 +81,10 @@ class PointAssigner(BaseAssigner):
             gt_wh = gt_bboxes_wh[[idx], :]
             # compute the distance between gt center and
             #   all points in this level
-            points_gt_dist = ((lvl_points - gt_point) / gt_wh).norm(dim=1)
+            points_gt_dist = ((lvl_points - gt_point) / gt_wh).norm(dim=1) #.norm求范数，其实就是distance的公式
             # find the nearest k points to gt center in this level
             min_dist, min_dist_index = torch.topk(
-                points_gt_dist, self.pos_num, largest=False)
+                points_gt_dist, self.pos_num, largest=False) #self.pos_num？？ largest=False,返回前k个最小元素
             # the index of nearest k points to gt center in this level
             min_dist_points_index = points_index[min_dist_index]
             # The less_than_recorded_index stores the index

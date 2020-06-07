@@ -43,7 +43,7 @@ model = dict(
 # training and testing settings
 train_cfg = dict(
     init=dict(
-        assigner=dict(type='PointAssigner', scale=4, pos_num=1),
+        assigner=dict(type='PointAssigner', scale=4, pos_num=1),#
         allowed_border=-1,
         pos_weight=-1,
         debug=False),
@@ -124,7 +124,7 @@ lr_config = dict(
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
-    interval=50,
+    interval=2,
     hooks=[
         dict(type='TextLoggerHook'),
         # dict(type='TensorboardLoggerHook')

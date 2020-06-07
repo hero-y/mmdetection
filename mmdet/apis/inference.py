@@ -11,6 +11,7 @@ from mmcv.runner import load_checkpoint
 from mmdet.core import get_classes
 from mmdet.datasets.pipelines import Compose
 from mmdet.models import build_detector
+import cv2
 
 
 def init_detector(config, checkpoint=None, device='cuda:0'):
@@ -83,10 +84,40 @@ def inference_detector(model, img):
     data = scatter(collate([data], samples_per_gpu=1), [device])[0]
     # forward the model
     with torch.no_grad():
-        result = model(return_loss=False, rescale=True, **data)
+        result = model(return_loss=False, rescale=True, **data) #rescale=true代表输出结果的bbox是/scale_factor的,这样最后show的时候显示的是原图的大小
 
     return result
 
+"""
+crop_object是根据分数把框选出的物体裁剪下来保存在文件夹中，且文件名用类名
+"""
+def crop_object(img,
+                bboxes,
+                labels,
+                class_names=None,
+                score_thr=0,
+                ):
+    last_label = str(0)
+    scores = bboxes[:, -1]
+    if score_thr > 0:
+        assert bboxes.shape[1] == 5
+        scores = bboxes[:, -1]
+        inds = scores > score_thr
+        bboxes = bboxes[inds, :]
+        labels = labels[inds]
+    for bbox, label in zip(bboxes, labels):
+        bbox_int = bbox.astype(np.int32)
+        left_top = (bbox_int[0], bbox_int[1])
+        right_bottom = (bbox_int[2], bbox_int[3])
+        img_crop = img[left_top[1]:right_bottom[1],left_top[0]:right_bottom[0],:]
+        label_text = class_names[
+            label] if class_names is not None else 'cls {}'.format(label)
+        if label == last_label:
+            index += 1
+        else:
+            index = 0
+        cv2.imwrite("crop_image/%s%s.png"%(label_text,index),img_crop)
+        last_label = label
 
 # TODO: merge this method with the one in BaseDetector
 def show_result(img,
@@ -95,7 +126,9 @@ def show_result(img,
                 score_thr=0.3,
                 wait_time=0,
                 show=True,
-                out_file=None):
+                out_file=None,
+                img_scale=(1333, 800), 
+                crop_flag=False):
     """Visualize the detection results on the image.
 
     Args:
@@ -119,8 +152,11 @@ def show_result(img,
     if isinstance(result, tuple):
         bbox_result, segm_result = result
     else:
-        bbox_result, segm_result = result, None
-    bboxes = np.vstack(bbox_result)
+        bbox_result, segm_result = result, None #bbox_result是按类分的list,len是80
+    bboxes = np.vstack(bbox_result) #bbox_result是按类分的list,len是80,某些类对应的位置可能是空的,所以用vstack后就可以把空的位置去掉
+    #将图像和bbox都rescale到一个特定的大小，这样无论输入图片有多大，显示的时候都是按照img_scale来的
+    img, scale_factor = mmcv.imrescale(img, img_scale, return_scale=True)
+    bboxes[:,:4] = bboxes[:,:4]*scale_factor
     # draw segmentation masks
     if segm_result is not None:
         segms = mmcv.concat_list(segm_result)
@@ -133,14 +169,25 @@ def show_result(img,
     labels = [
         np.full(bbox.shape[0], i, dtype=np.int32)
         for i, bbox in enumerate(bbox_result)
-    ]
-    labels = np.concatenate(labels)
+    ] #这种形式对每个class进行循环,bbox.shape[0]代表的是该类中bbox的个数,可能为0
+    labels = np.concatenate(labels)#用concatenate后就会把空的去掉
+    if crop_flag == True:
+        crop_object(
+            img,
+            bboxes,
+            labels,
+            class_names=class_names,
+            score_thr=score_thr,
+        )
     mmcv.imshow_det_bboxes(
         img,
         bboxes,
         labels,
         class_names=class_names,
         score_thr=score_thr,
+        bbox_color='blue',
+        text_color='white',
+        thickness=2,
         show=show,
         wait_time=wait_time,
         out_file=out_file)
@@ -167,5 +214,6 @@ def show_result_pyplot(img,
     """
     img = show_result(
         img, result, class_names, score_thr=score_thr, show=False)
-    plt.figure(figsize=fig_size)
+    # plt.figure(figsize=fig_size)
     plt.imshow(mmcv.bgr2rgb(img))
+    plt.show()
