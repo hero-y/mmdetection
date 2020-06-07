@@ -61,6 +61,9 @@ class SingleStageDetector(BaseDetector):
                       gt_labels,
                       gt_bboxes_ignore=None):
         x = self.extract_feat(img)
+        # debug neck输出的尺寸
+        # print("img",img.shape)
+        # print("x",x[0].shape,x[1].shape,x[2].shape,x[3].shape,x[4].shape)
         outs = self.bbox_head(x)
         loss_inputs = outs + (gt_bboxes, gt_labels, img_metas, self.train_cfg)
         losses = self.bbox_head.loss(

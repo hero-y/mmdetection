@@ -220,7 +220,7 @@ class RepPointsHead(nn.Module):
         :param previous_boxes: previous bboxes.
         :return: generate grids on the regressed bboxes.
         """
-        b, _, h, w = reg.shape
+        b, _, h, w = reg.shape #(2,4,h,w)使用grid时候通道是4，分别是x,y,w,h的偏移量，其中x,y是中心
         bxy = (previous_boxes[:, :2, ...] + previous_boxes[:, 2:, ...]) / 2.
         bwh = (previous_boxes[:, 2:, ...] -
                previous_boxes[:, :2, ...]).clamp(min=1e-6)
@@ -253,7 +253,7 @@ class RepPointsHead(nn.Module):
         #   from regular grid placed on a pre-defined bbox.
         if self.use_grid_points or not self.center_init:
             scale = self.point_base_scale / 2
-            points_init = dcn_base_offset / dcn_base_offset.max() * scale
+            points_init = dcn_base_offset / dcn_base_offset.max() * scale#(1,18,1,1)
             bbox_init = x.new_tensor([-scale, -scale, scale,
                                       scale]).view(1, 4, 1, 1)
         else:
@@ -358,7 +358,7 @@ class RepPointsHead(nn.Module):
                 pts_shift = pred_list[i_lvl][i_img]#(18,h,w)
                 yx_pts_shift = pts_shift.permute(1, 2, 0).view(
                     -1, 2 * self.num_points)
-                y_pts_shift = yx_pts_shift[..., 0::2]
+                y_pts_shift = yx_pts_shift[..., 0::2]#预测的点是先预测的y,再x
                 x_pts_shift = yx_pts_shift[..., 1::2]
                 xy_pts_shift = torch.stack([x_pts_shift, y_pts_shift], -1)
                 xy_pts_shift = xy_pts_shift.view(*yx_pts_shift.shape[:-1], -1)
@@ -366,7 +366,7 @@ class RepPointsHead(nn.Module):
                 pts_lvl.append(pts)
             pts_lvl = torch.stack(pts_lvl, 0)
             pts_list.append(pts_lvl)
-        return pts_list#[lvl1,lvl2,lvl3,lvl4,lvl5]其中lvl1是(2,n,2)
+        return pts_list#[lvl1,lvl2,lvl3,lvl4,lvl5]其中lvl1是(2,n,18)
 
     #对每个level使用
     def loss_single(self, cls_score, pts_pred_init, pts_pred_refine, labels,
@@ -447,7 +447,6 @@ class RepPointsHead(nn.Module):
         num_total_samples_init = (
             num_total_pos_init +
             num_total_neg_init if self.sampling else num_total_pos_init)
-
         # target for refinement stage
         center_list, valid_flag_list = self.get_points(featmap_sizes,
                                                        img_metas)
@@ -481,7 +480,9 @@ class RepPointsHead(nn.Module):
         num_total_samples_refine = (
             num_total_pos_refine +
             num_total_neg_refine if self.sampling else num_total_pos_refine)
-
+        # print("num_total_pos_refine",num_total_pos_refine)
+        # print("num_total_neg_refine",num_total_neg_refine)
+        # print("num_total_samples_refine",num_total_samples_refine)
         # compute loss
         losses_cls, losses_pts_init, losses_pts_refine = multi_apply(
             self.loss_single,

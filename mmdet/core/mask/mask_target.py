@@ -8,7 +8,7 @@ def mask_target(pos_proposals_list, pos_assigned_gt_inds_list, gt_masks_list,
                 cfg):
     cfg_list = [cfg for _ in range(len(pos_proposals_list))]#len为2，即图像的batch数
     mask_targets = map(mask_target_single, pos_proposals_list,
-                       pos_assigned_gt_inds_list, gt_masks_list, cfg_list)
+                       pos_assigned_gt_inds_list, gt_masks_list, cfg_list)#这里不用multi_apply是因为只有一个输出量
     mask_targets = torch.cat(list(mask_targets))
     return mask_targets
 
@@ -26,7 +26,8 @@ def mask_target_single(pos_proposals, pos_assigned_gt_inds, gt_masks, cfg):
         proposals_np = pos_proposals.cpu().numpy()
         pos_assigned_gt_inds = pos_assigned_gt_inds.cpu().numpy()
         for i in range(num_pos):
-            gt_mask = gt_masks[pos_assigned_gt_inds[i]]
+            gt_mask = gt_masks[pos_assigned_gt_inds[i]]#标注的方式应该是一幅图像中的每个物体都有一个大小为原图的mask，物体所在的位置为1，其余为0
+            # print("gt_mask",gt_mask.shape)
             bbox = proposals_np[i, :].astype(np.int32)
             x1, y1, x2, y2 = bbox
             w = np.maximum(x2 - x1 + 1, 1)
@@ -34,7 +35,8 @@ def mask_target_single(pos_proposals, pos_assigned_gt_inds, gt_masks, cfg):
             # mask is uint8 both before and after resizing
             # mask_size (h, w) to (w, h)
             target = mmcv.imresize(gt_mask[y1:y1 + h, x1:x1 + w],
-                                   mask_size[::-1])#(28,28)
+                                   mask_size[::-1])#(28,28) 只有1和0
+            # print("target",target)
             mask_targets.append(target)
         mask_targets = torch.from_numpy(np.stack(mask_targets)).float().to(
             pos_proposals.device)#(n,28,28),n是每个图像的正proposal的个数

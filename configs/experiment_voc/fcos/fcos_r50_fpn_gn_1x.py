@@ -2,7 +2,7 @@
 norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
 
 model = dict(
-    type='RepPointsDetector',
+    type='FCOS',
     pretrained='torchvision://resnet50',
     backbone=dict(
         type='ResNet',
@@ -17,19 +17,17 @@ model = dict(
         out_channels=256,
         start_level=1,
         add_extra_convs=True,
+        extra_convs_on_inputs=False,  # use P5
         num_outs=5,
-        norm_cfg=norm_cfg),
+        norm_cfg=norm_cfg,
+        relu_before_extra_convs=True),
     bbox_head=dict(
-        type='RepPointsHead',
+        type='FCOSHead',
         num_classes=21,
         in_channels=256,
+        stacked_convs=4,
         feat_channels=256,
-        point_feat_channels=256,
-        stacked_convs=3,
-        num_points=9,
-        gradient_mul=0.1,
-        point_strides=[8, 16, 32, 64, 128],
-        point_base_scale=4,
+        strides=[8, 16, 32, 64, 128],
         norm_cfg=norm_cfg,
         loss_cls=dict(
             type='FocalLoss',
@@ -37,27 +35,20 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=1.0),
-        loss_bbox_init=dict(type='SmoothL1Loss', beta=0.11, loss_weight=0.5),
-        loss_bbox_refine=dict(type='SmoothL1Loss', beta=0.11, loss_weight=1.0),
-        # use_grid_points = True,
-        transform_method='minmax'))
+        loss_bbox=dict(type='IoULoss', loss_weight=1.0),
+        loss_centerness=dict(
+            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0)))
 # training and testing settings
 train_cfg = dict(
-    init=dict(
-        assigner=dict(type='PointAssigner', scale=4, pos_num=1),
-        allowed_border=-1,
-        pos_weight=-1,
-        debug=False),
-    refine=dict(
-        assigner=dict(
-            type='MaxIoUAssigner',
-            pos_iou_thr=0.5,
-            neg_iou_thr=0.4,
-            min_pos_iou=0,
-            ignore_iof_thr=-1),
-        allowed_border=-1,
-        pos_weight=-1,
-        debug=False))
+    assigner=dict(
+        type='MaxIoUAssigner',
+        pos_iou_thr=0.5,
+        neg_iou_thr=0.4,
+        min_pos_iou=0,
+        ignore_iof_thr=-1),
+    allowed_border=-1,
+    pos_weight=-1,
+    debug=False)
 test_cfg = dict(
     nms_pre=1000,
     min_bbox_size=0,
@@ -119,7 +110,12 @@ data = dict(
         img_prefix=data_root + 'VOC2007/',
         pipeline=test_pipeline))
 # optimizer
-optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(
+    type='SGD',
+    lr=0.01,
+    momentum=0.9,
+    weight_decay=0.0001,
+    paramwise_options=dict(bias_lr_mult=2., bias_decay_mult=0.))
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -131,7 +127,7 @@ lr_config = dict(
 checkpoint_config = dict(interval=4)
 # yapf:disable
 log_config = dict(
-    interval=50,
+    interval=20,
     hooks=[
         dict(type='TextLoggerHook'),
         # dict(type='TensorboardLoggerHook')
@@ -142,9 +138,9 @@ total_epochs = 4
 device_ids = range(8)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/experiment_voc/reppoints/reppoints_minmax_r50_fpn_1x'
+work_dir = './work_dirs/experiment_voc/fcos/fcos_r50_fpn_1x'
 load_from = None
 resume_from = None
 auto_resume = True
-# workflow = [('train', 1),('val',1)]
-workflow = [('train', 1)]
+workflow = [('train', 1),('val',1)]
+# workflow = [('train', 1)]

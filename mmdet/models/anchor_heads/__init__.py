@@ -7,9 +7,11 @@ from .reppoints_head import RepPointsHead
 from .retina_head import RetinaHead
 from .rpn_head import RPNHead
 from .ssd_head import SSDHead
+from .fcreppoints_head import FCRepPointsHead
+from .fcreppoints_head_dcn import FCRepPointsDCNHead
 
 __all__ = [
     'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption', 'RPNHead',
     'GARPNHead', 'RetinaHead', 'GARetinaHead', 'SSDHead', 'FCOSHead',
-    'RepPointsHead'
+    'RepPointsHead', 'FCRepPointsHead', 'FCRepPointsDCNHead'
 ]

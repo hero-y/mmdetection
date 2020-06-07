@@ -67,7 +67,7 @@ class FCNMaskHead(nn.Module):
             self.conv_out_channels if self.num_convs > 0 else in_channels)
         if self.upsample_method is None:
             self.upsample = None
-        elif self.upsample_method == 'deconv':#ConvTranspose2d(256,256,kernel_size=(2,2),stride=(2,2))
+        elif self.upsample_method == 'deconv':#ConvTranspose2d(256,256,kernel_size=(2,2),stride=(2,2))加入转置卷积把roi从14x14变成28x28是为了增加分辨率，没其他原因
             self.upsample = nn.ConvTranspose2d(
                 upsample_in_channels,
                 self.conv_out_channels,
@@ -185,10 +185,10 @@ class FCNMaskHead(nn.Module):
 
             bbox_mask = mmcv.imresize(mask_pred_, (w, h))#bbox_mask是mask_pred resize到对应的pro的大小
             bbox_mask = (bbox_mask > rcnn_test_cfg.mask_thr_binary).astype(
-                np.uint8)
+                np.uint8)#如果预测的值>0.5就是1，否则为0
             im_mask[bbox[1]:bbox[1] + h, bbox[0]:bbox[0] + w] = bbox_mask #在对应bbox的位置，赋值为bbox_mask
             rle = mask_util.encode(
-                np.array(im_mask[:, :, np.newaxis], order='F'))[0]#在show_result的时候会decode
-            cls_segms[label - 1].append(rle)
+                np.array(im_mask[:, :, np.newaxis], order='F'))[0]#在show_result的时候会decode 是pycocotool的函数
+            cls_segms[label - 1].append(rle)#在这里把mask放在对应的label处
 
         return cls_segms

@@ -338,7 +338,7 @@ class FCOSHead(nn.Module):
         expanded_regress_ranges = [
             points[i].new_tensor(self.regress_ranges[i])[None].expand_as(
                 points[i]) for i in range(num_levels)
-        ]
+        ]#5个level的list,每个值的shape是(num_points,2),5个level是有5种regress_ranges
         # concat all levels points and regress ranges
         concat_regress_ranges = torch.cat(expanded_regress_ranges, dim=0)
         concat_points = torch.cat(points, dim=0)
@@ -397,7 +397,7 @@ class FCOSHead(nn.Module):
         bbox_targets = torch.stack((left, top, right, bottom), -1) #(num_points,num_gts,4)
 
         # condition1: inside a gt bbox
-        inside_gt_bbox_mask = bbox_targets.min(-1)[0] > 0 #(num_points,num_gts),其中min(-1)返回的是values,indices，[0]代表取出values
+        inside_gt_bbox_mask = bbox_targets.min(-1)[0] > 0 #(num_points,num_gts),其中-1代表最后一维，即4，比较4个坐标中的最小值，min(-1)返回的是values,indices，[0]代表取出values
 
         # condition2: limit the regression range for each location
         max_regress_distance = bbox_targets.max(-1)[0]
@@ -418,7 +418,7 @@ class FCOSHead(nn.Module):
         #target和target之间应该是有关联的，如这里是对每一个点穷举出所有的gt,求出和每个gt的target，
         #再根据大小做出过滤，过滤后生成的序号可以用来求出对应的label_target,这里用的是area,个人人为
         #应该使用centerness的思想，将最大的centerness对应的gt的label作为target
-        labels = gt_labels[min_area_inds] #(num_points,4)
+        labels = gt_labels[min_area_inds] #(num_points,1)
         labels[min_area == INF] = 0
         bbox_targets = bbox_targets[range(num_points), min_area_inds] #(num_points,4)
 

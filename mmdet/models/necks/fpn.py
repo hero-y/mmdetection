@@ -21,6 +21,14 @@ ResNet使用的是C3-C5，FPN用的是P3-P7，其中P3-P5和原先一样，P6是
 在此基础上又加上了一个3*3，stride=2的conv,所以lateral_convs就只有3个，分别负责C3-C5，fpn_convs有5个，
 添加了两个3*3，stride=2,start_level是1，backbone_end_level是4，因为输入的是ResNet的后四层，所以代表是从C3-C5
 
+#lateral_convs的长度，对faster rcnn来说是4，对retinanet来说是3
+#因为不论是fasterrcnn还是retinanet,resnet的输出都是输出后四个阶段，在config也有体现num_stages=4
+#neck中的start_level是在这四个阶段中选择开始的阶段，retinanet选择的是start_lvl=1,也就是C3开始
+#在faster rcnn中通过对c2-c5使用fpn后生成p2-p5,然后再对p5使用最大池化
+#在retinanet中通过对c3-c3使用fpn生成p3-p5,如果extra_convs_on_inputs=True(默认)，就是对c5进行conv输出p6,再对p6进行conv输出p7
+#如果extra_convs_on_inputs=False,就是对p5进行conv输出p6,再对p6进行conv输出p7
+#这里还有个参数是relu_before_extra_convs，默认为false,就是从p6生成p7的时候直接conv,如果是true，则从p6到p7就先relu再conv
+
 """
 @NECKS.register_module
 class FPN(nn.Module):

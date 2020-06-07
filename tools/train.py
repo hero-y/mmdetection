@@ -11,6 +11,8 @@ from mmdet.apis import (get_root_logger, init_dist, set_random_seed,
 from mmdet.datasets import build_dataset
 from mmdet.models import build_detector
 import copy
+# import multiprocessing
+# multiprocessing.set_start_method('spawn',True)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
@@ -49,6 +51,7 @@ def parse_args():
 def main():
     args = parse_args()
 
+    # cfg = Config.fromfile("configs/experiment_voc/reppoints/reppoints_anchor_init_minmax_r50_fpn_1x.py")
     cfg = Config.fromfile(args.config)  #Config在mmcv中
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):

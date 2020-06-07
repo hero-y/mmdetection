@@ -65,6 +65,9 @@ pred和target的size()[0]都是一个batch中所有图像的pro的和
 """
 def mask_cross_entropy(pred, target, label, reduction='mean', avg_factor=None):
     # TODO: handle these two reserved arguments
+    #pred:(n,81,28,28) target:(n,28,28) label:(n,) 注意这里通道数是81，论文中也说了实例分割任务中对每一类单独使用sigmoid效果好
+    #所以使用pred[inds, label]把对应位置的序号取出来，然后使用binary_cross_entropy_with_logits(专门用于sigmoid的函数)
+    #并也可以说明gt_mask的值只有0,1,然后通过label来进行限定具体
     assert reduction == 'mean' and avg_factor is None
     num_rois = pred.size()[0]
     inds = torch.arange(0, num_rois, dtype=torch.long, device=pred.device)
