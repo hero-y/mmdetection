@@ -109,6 +109,7 @@ mmdet/version.py
 data
 .vscode
 .idea
+model_zoo
 
 # custom
 *.pkl
@@ -118,3 +119,5 @@ work_dirs/
 
 # Pytorch
 *.pth
+
+.history/
