@@ -119,5 +119,4 @@ work_dirs/
 
 # Pytorch
 *.pth
-
-.history/
+.history

@@ -9,7 +9,7 @@ class AnchorGenerator(object):
         self.ratios = torch.Tensor(ratios)
         self.scale_major = scale_major
         self.ctr = ctr
-        self.base_anchors = self.gen_base_anchors() #这些init再导入数据前就完成了
+        self.base_anchors = self.gen_base_anchors() #这些init再导入数据前就完成了shape(9,4)
 
     @property
     def num_base_anchors(self):
@@ -41,7 +41,7 @@ class AnchorGenerator(object):
                 x_ctr - 0.5 * (ws - 1), y_ctr - 0.5 * (hs - 1),  #x_ctr是普通值，也可以加减乘除tensor值
                 x_ctr + 0.5 * (ws - 1), y_ctr + 0.5 * (hs - 1)
             ],
-            dim=-1).round() #返回浮点数的四舍五入值 shpe是(3,4)
+            dim=-1).round() #返回浮点数的四舍五入值 shpe是(9,4)
         # yapf: enable
         return base_anchors
 

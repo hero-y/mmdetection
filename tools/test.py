@@ -188,7 +188,7 @@ def main():
         model = MMDistributedDataParallel(model.cuda())
         outputs = multi_gpu_test(model, data_loader, args.tmpdir)
 
-    rank, _ = get_dist_info()
+    rank, _ = get_dist_info()#必须要有，否则在多gpu的时候会报错
     if args.out and rank == 0:
         print('\nwriting results to {}'.format(args.out))
         mmcv.dump(outputs, args.out)

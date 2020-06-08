@@ -65,7 +65,7 @@ class PointAssigner(BaseAssigner):
         # stores the assigned gt index of each point
         assigned_gt_inds = points.new_zeros((num_points, ), dtype=torch.long)
         # stores the assigned gt dist (to this point) of each point
-        assigned_gt_dist = points.new_full((num_points, ), float('inf')) #??
+        assigned_gt_dist = points.new_full((num_points, ), float('inf'))#'inf'是无穷大的意思，'-inf'是无穷小的意思
         points_range = torch.arange(points.shape[0])
 
         for idx in range(num_gts):
@@ -92,7 +92,7 @@ class PointAssigner(BaseAssigner):
             #   assigned_gt_dist stores the dist from previous assigned gt
             #   (if exist) to each point.
             less_than_recorded_index = min_dist < assigned_gt_dist[
-                min_dist_points_index]
+                min_dist_points_index]#对于每个点只有改点相对于新的gt的距离比之前的小了才会更新，因为一个点就只能对应一个gt
             # The min_dist_points_index stores the index of points satisfy:
             #   (1) it is k nearest to current gt center in this level.
             #   (2) it is closer to current gt center than other gt center.

@@ -310,7 +310,7 @@ class RepPointsHead(nn.Module):
     def forward(self, feats):
         return multi_apply(self.forward_single, feats)
 
-    def get_points(self, featmap_sizes, img_metas):
+    def get_points(self, featmap_sizes, img_metas):#点生成其实和anchor一样的，因为anchor的坐标就是两个点，可以通过中心点求出
         """Get points according to feature map sizes.
 
         Args:
@@ -376,20 +376,21 @@ class RepPointsHead(nn.Module):
             pts_lvl = []
             for i_img in range(len(center_list)):
                 pts_center = center_list[i_img][i_lvl][:, :2].repeat(
-                    1, self.num_points) #(n,18) n = w*h
-                pts_shift = pred_list[i_lvl][i_img] #(18,h,w)
+                    1, self.num_points)#(n,18)注意这里要使用一下repeat因为最开始每个位置只有一个点
+                pts_shift = pred_list[i_lvl][i_img]#(18,h,w)
                 yx_pts_shift = pts_shift.permute(1, 2, 0).view(
                     -1, 2 * self.num_points)#(n,18)
-                y_pts_shift = yx_pts_shift[..., 0::2] #(n,9)
-                x_pts_shift = yx_pts_shift[..., 1::2] #(n,9)
-                xy_pts_shift = torch.stack([x_pts_shift, y_pts_shift], -1) #(n,9,2)
-                xy_pts_shift = xy_pts_shift.view(*yx_pts_shift.shape[:-1], -1) #(n,18)
-                pts = xy_pts_shift * self.point_strides[i_lvl] + pts_center
+                y_pts_shift = yx_pts_shift[..., 0::2]#(n,9)
+                x_pts_shift = yx_pts_shift[..., 1::2]#(n,9)
+                xy_pts_shift = torch.stack([x_pts_shift, y_pts_shift], -1)#(n,9,2)
+                xy_pts_shift = xy_pts_shift.view(*yx_pts_shift.shape[:-1], -1)#(n,18)
+                pts = xy_pts_shift * self.point_strides[i_lvl] + pts_center #注意点预测的偏移*point_strides
                 pts_lvl.append(pts)
             pts_lvl = torch.stack(pts_lvl, 0) #(2,n,18)
             pts_list.append(pts_lvl)
-        return pts_list
+        return pts_list#[lvl1,lvl2,lvl3,lvl4,lvl5]其中lvl1是(2,n,2)
 
+    #对每个level使用
     def loss_single(self, cls_score, pts_pred_init, pts_pred_refine, labels,
                     label_weights, bbox_gt_init, bbox_weights_init,
                     bbox_gt_refine, bbox_weights_refine, stride,
@@ -442,9 +443,9 @@ class RepPointsHead(nn.Module):
 
         # target for initial stage
         center_list, valid_flag_list = self.get_points(featmap_sizes,
-                                                       img_metas) #[img][lvl] (n,3)
+                                                       img_metas)#centerlist是[imglist1,imglist2]其中imglist1里是5个level的点值(n,3),这里每个位置只有一个点
         pts_coordinate_preds_init = self.offset_to_pts(center_list,
-                                                       pts_preds_init) #[lvl] (2,n,18)
+                                                       pts_preds_init)#[lvl1,lvl2,lvl3,lvl4,lvl5]其中lvl1是(2,n,2)
         if cfg.init.assigner['type'] == 'PointAssigner':
             # Assign target for center list
             candidate_list = center_list
@@ -465,7 +466,7 @@ class RepPointsHead(nn.Module):
             sampling=self.sampling)
         #bbox_gt_list_init是bbox_gt_list；candidate_list_init是proposals_list
         (*_, bbox_gt_list_init, candidate_list_init, bbox_weights_list_init,
-         num_total_pos_init, num_total_neg_init) = cls_reg_targets_init 
+         num_total_pos_init, num_total_neg_init) = cls_reg_targets_init#每个List都是[imlist1,imlist2]
         num_total_samples_init = (
             num_total_pos_init +
             num_total_neg_init if self.sampling else num_total_pos_init)
@@ -562,6 +563,7 @@ class RepPointsHead(nn.Module):
             result_list.append(proposals)
         return result_list
 
+    #对每个图使用
     def get_bboxes_single(self,
                           cls_scores,
                           bbox_preds,

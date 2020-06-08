@@ -6,7 +6,7 @@ gt_inds,max_overlaps,labels的个数都是proposal的个数
 __init__主要目的是取出现在的Proposal对应的gt序号，和最大的overlap和对应的labels
 再用torch.cat把这三项的gt加上分别是：torch.cat([torch.arange(1,len(gt_labels)+1,device='cuda'),self.gt_inds])
 torch.cat([self.max_overlaps.new_ones(num_gts),self.max_overlaps])
-otrch.cat([gt_labels,self.labels])
+torch.cat([gt_labels,self.labels])
 """
 class AssignResult(object):
 

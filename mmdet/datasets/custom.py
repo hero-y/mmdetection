@@ -82,6 +82,7 @@ class CustomDataset(Dataset):
         # processing pipeline
         self.pipeline = Compose(pipeline)
 
+
     def __len__(self):
         return len(self.img_infos)
 

@@ -30,6 +30,12 @@ def exp_dim():
     val,index = o.max(dim=1) #和topk一样显示val，再是Index
     sort_val, indices = torch.sort(o, dim=1, descending = True) #dim=1，代表列发生变化
 
+    na = np.arange(12).reshape(3,4)
+    nb = np.arange(12).reshape(3,4)
+    print(np.vstack((na,nb)).shape) #(6,4)((na,nb))里面要打括号，因为这样子就相当于是一个参数的位置了
+    print(np.hstack((na,nb)).shape) #(3,8)
+    print(np.concatenate((na,nb),axis=1).shape) #(3,8)
+    
     print('m',m)
     print('a', a)
     print('b', b)
